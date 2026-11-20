@@ -77,6 +77,7 @@ def edit_lead(lead_id: int, data: LeadPatch, ctx=Depends(current_membership), db
     if stamp(lead.updated_at) != stamp(data.expected_updated_at): raise HTTPException(409, "This lead changed. Reopen it before saving to avoid overwriting someone else's work.")
     fields = data.model_fields_set - {"expected_updated_at", "do_not_contact"}
     contact_changed = False
+    status_changed = "status" in fields and data.status != lead.status
     if "assigned_user_id" in fields and data.assigned_user_id is not None:
         membership = db.scalar(select(Membership).join(User, User.id == Membership.user_id).where(Membership.user_id == data.assigned_user_id, Membership.organization_id == ctx["organization_id"], Membership.is_active == True, User.is_active == True))
         if not membership: raise HTTPException(400, "Assignee must be an active member of this workspace")
@@ -95,7 +96,7 @@ def edit_lead(lead_id: int, data: LeadPatch, ctx=Depends(current_membership), db
         if value is None and key != "amount": raise HTTPException(400, key+" cannot be null")
         setattr(lead, key, value.strip() if isinstance(value, str) else value)
     if "currency" in fields: lead.currency = lead.currency.upper()
-    if "status" in fields:
+    if status_changed:
         lead.classification_reason = "Status set manually by a workspace salesperson"
         lead.confidence = 1
     if contact_changed: lead.consent = False
