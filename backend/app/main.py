@@ -14,6 +14,9 @@ from .agents import classify
 from .outreach import router as outreach_router
 from .whatsapp import router as whatsapp_router
 from .crm import router as crm_router
+from .accounts import router as accounts_router, session_payload, limit_auth, LoginInput
+from fastapi import Request
+from .agents import baseline
 
 @asynccontextmanager
 async def lifespan(app):
@@ -33,20 +36,23 @@ app=FastAPI(title="NEXUS AI API",version="1.0.0",lifespan=lifespan)
 app.include_router(outreach_router)
 app.include_router(whatsapp_router)
 app.include_router(crm_router)
+app.include_router(accounts_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
 @app.post("/auth/login")
-def login(data:dict,db:Session=Depends(get_db)):
-    email=str(data.get("email","")).lower();password=str(data.get("password",""))
-    user=db.scalar(select(User).where(User.email==email))
+def login(data:LoginInput,request:Request,db:Session=Depends(get_db)):
+    email=data.email.strip().lower();password=data.password
+    limit_auth(db, request, "login", email)
+    user=db.scalar(select(User).where(func.lower(User.email)==email))
     if not user or not user.is_active or not verify_password(password,user.password_hash):raise HTTPException(401,"Incorrect email or password")
-    membership=db.scalar(select(Membership).where(Membership.user_id==user.id,Membership.is_active==True))
+    membership=db.scalar(select(Membership).where(Membership.user_id==user.id,Membership.is_active==True).order_by(Membership.id))
     if not membership:raise HTTPException(403,"No active organization")
-    return {"access_token":token_for(user.id),"token_type":"bearer","user":{"id":user.id,"email":user.email,"name":user.full_name},"organization":{"id":membership.organization_id,"role":membership.role}}
+    return session_payload(db,user,membership)
 @app.get("/auth/me")
-def me(ctx=Depends(current_membership)):
-    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":ctx["organization_id"],"role":ctx["membership"].role}
+def me(ctx=Depends(current_membership),db:Session=Depends(get_db)):
+    org=db.get(Organization,ctx["organization_id"])
+    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":ctx["membership"].role}
 @app.get("/dashboard/summary")
 def summary(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     org=ctx["organization_id"]; total=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org)) or 0
@@ -62,7 +68,8 @@ def leads(status:str|None=None,q:str|None=None,limit:int=100,ctx=Depends(current
     return [{"id":x.id,"name":x.name,"phone":x.phone,"email":x.email,"source":x.source,"status":x.status,"consent":x.consent,"opted_out":x.opted_out,"currency":x.currency,"amount":x.amount,"goal":x.goal} for x in db.scalars(stmt.limit(min(max(limit,1),500))).all()]
 @app.post("/leads/import")
 async def import_leads(file:UploadFile=File(...),ctx=Depends(current_membership),db:Session=Depends(get_db)):
-    name=(file.filename or "").lower();raw=await file.read()
+    name=(file.filename or "").lower();raw=await file.read(5*1024*1024+1)
+    if len(raw)>5*1024*1024:raise HTTPException(413,"Maximum upload size is 5 MB")
     try:
         if name.endswith(".csv"):
             try:frame=pd.read_csv(io.BytesIO(raw),encoding="utf-8-sig")
@@ -71,7 +78,8 @@ async def import_leads(file:UploadFile=File(...),ctx=Depends(current_membership)
         else:raise HTTPException(400,"Upload .csv or .xlsx")
     except HTTPException:raise
     except Exception as e:raise HTTPException(400,f"Cannot parse spreadsheet: {e}")
-    frame=frame.rename(columns=normalize_headers(frame.columns))
+    if len(frame)>5000:raise HTTPException(413,"Import at most 5,000 rows at once")
+    frame=frame.fillna("").rename(columns=normalize_headers(frame.columns))
     if "phone" not in frame.columns:raise HTTPException(400,"Required column: phone")
     org=ctx["organization_id"];known=set(db.scalars(select(Lead.phone).where(Lead.organization_id==org)).all())
     imported=duplicates=invalid=0
@@ -96,7 +104,9 @@ async def import_leads(file:UploadFile=File(...),ctx=Depends(current_membership)
 async def classify_lead(lead_id:int,ctx=Depends(current_membership),db:Session=Depends(get_db)):
     lead=db.scalar(select(Lead).where(Lead.id==lead_id,Lead.organization_id==ctx["organization_id"]))
     if not lead:raise HTTPException(404,"Lead not found")
-    label,confidence,reason=await classify(" ".join([lead.goal or "",lead.source_message or ""]))
+    text=" ".join([lead.goal or "",lead.source_message or ""])
+    org=db.get(Organization,ctx["organization_id"])
+    label,confidence,reason=baseline(text) if org.trial_only else await classify(text)
     lead.status,lead.confidence,lead.classification_reason=label,confidence,reason
     db.add(AuditLog(organization_id=ctx["organization_id"],actor_user_id=ctx["user"].id,action="agent.classify",details={"lead_id":lead.id,"status":label,"confidence":confidence}))
     db.commit()
