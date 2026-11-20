@@ -119,3 +119,18 @@ free), integrations hub, billing enforcement, launch hardening.
   Never commit .env.
 - Live URLs: frontend https://nexus-ai-zeta-wine.vercel.app — API
   https://nexus-ai-api-knad.onrender.com (Render free: cold start ~1 min).
+
+## 2026-11-20 — /platform delete control fix + live verification
+
+**Problem:** Owner opened /platform and saw a "Platform operators only" panel with no delete controls. Root cause: JWT access tokens expire after 60 minutes; her stored token had expired, the API returned 401, and the page mislabeled that as a permissions restriction.
+
+**Fix (commit 2268eb1):**
+- /platform now hard-redirects to / when the session is missing/expired or the account is not a platform operator (no more misleading restricted panel; link in the header is also hidden for non-operators).
+- window.prompt/confirm replaced with an inline reason-confirm panel per row: shows member/lead counts and the retention note, requires a typed reason, then Suspend/Delete/Restore executes and the row updates in place.
+
+**Verified live (browser, signed in as the owner on https://nexus-ai-zeta-wine.vercel.app):**
+- Header shows the Platform link; /platform lists every tenant workspace with Suspend + Delete on active rows.
+- Full delete flow exercised on a disposable probe workspace: typed reason → confirmed → row flipped to "deleted" with Restore only; banner confirmed retention.
+- Server side: organization soft-deleted (is_active=false, deleted_at set), audit_logs row platform.org_deleted with the reason and operator email, and the probe user's login now returns 403.
+- Non-operator envelope verified: /auth/me returns is_platform_admin=false for a normal user, /platform/organizations returns 403, and the shipped bundle redirects non-operators/expired sessions to / (gate confirmed in the live JS).
+- Probe workspace and user hard-removed after verification. Remaining tenant workspaces: NEXUS Demo Workspace, QA Company A/B (test-only leftovers from earlier QA; deletable from /platform anytime).
