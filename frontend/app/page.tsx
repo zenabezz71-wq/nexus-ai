@@ -1,7 +1,8 @@
 "use client";
 import {useEffect,useState} from "react";
+import Outreach from "./Outreach";
 const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:8000";
-type Lead={id:number;name:string;phone:string;source:string;status:string;consent:boolean;goal:string};
+type Lead={id:number;name:string;phone:string;email:string;opted_out:boolean;source:string;status:string;consent:boolean;goal:string};
 type Summary={total_leads:number;eligible_contacts:number;statuses:Record<string,number>};
 export default function Home(){
  const [token,setToken]=useState("");const [email,setEmail]=useState("admin@example.com");const [password,setPassword]=useState("");
@@ -19,6 +20,7 @@ export default function Home(){
  <section className="grid"><div className="stat">Total leads<strong>{summary?.total_leads??"—"}</strong></div><div className="stat">Consent eligible<strong>{summary?.eligible_contacts??"—"}</strong></div><div className="stat">Hot leads<strong>{summary?.statuses?.hot_lead??0}</strong></div><div className="stat">Follow-ups<strong>{summary?.statuses?.follow_up??0}</strong></div></section>
  <section className="panel"><h2>Import leads</h2><p className="muted">Upload CSV/XLSX. Consent defaults to false; no outreach is triggered.</p><div className="row"><input type="file" accept=".csv,.xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="btn" disabled={!file} onClick={upload}>Import spreadsheet</button></div></section>
  <section className="panel"><h2>Lead intelligence</h2><div className="row" style={{marginBottom:12}}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, phone or email"/><button className="btn alt" onClick={search}>Search</button><button className="btn alt" onClick={()=>refresh()}>Refresh</button></div><div style={{overflowX:"auto"}}><table><thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Status</th><th>Consent</th><th>Agent</th></tr></thead><tbody>{leads.map(x=><tr key={x.id}><td>{x.name||"—"}</td><td>{x.phone}</td><td>{x.source}</td><td><span className="tag">{x.status}</span></td><td>{x.consent?"Opt-in":"Not recorded"}</td><td><button className="btn alt" onClick={()=>classify(x.id)}>Classify</button></td></tr>)}{!leads.length&&<tr><td colSpan={6}>No leads yet.</td></tr>}</tbody></table></div></section>
+ <Outreach token={token} leads={leads}/>
  <section className="panel"><h2>Universal lead ingestion</h2><p className="muted">Connect an ad platform, landing page, CRM or automation tool using:</p><code>POST {API}/webhooks/YOUR_SOURCE</code><p className="muted">Authenticated with the workspace Bearer token. See README for JSON schema.</p></section></>}
  <p className="alert" role="status">{note}</p></main></>
-}
+  }
