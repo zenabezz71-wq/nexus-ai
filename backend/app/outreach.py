@@ -15,7 +15,7 @@ from sqlalchemy import select, update, String, Integer, Text, DateTime, ForeignK
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from .database import Base, get_db
-from .models import Lead, AuditLog, now
+from .models import Lead, AuditLog, Organization, now
 from .auth import current_membership
 from .config import settings
 
@@ -82,6 +82,13 @@ def cap():
     return min(max(settings.outreach_daily_cap, 0), 290)
 
 
+def trial_workspace(db,ctx):
+    org=db.get(Organization,ctx["organization_id"])
+    return bool(org and org.trial_only)
+
+def workspace_blockers(db,ctx):
+    return ["Company trial: live sending is unavailable; no shared sender credentials are used"] if trial_workspace(db,ctx) else []
+
 def readiness():
     missing = []
     if not settings.outreach_enabled: missing.append("Live sending is disabled (demo mode)")
@@ -114,6 +121,11 @@ def unsubscribe_token(org, recipient):
 
 
 def content(db, lead):
+    org=db.get(Organization,lead.organization_id)
+    if org.trial_only:
+        template=get_template(db,lead.organization_id)
+        demo=lambda text:text.replace("{name}",(lead.name.strip() or "there")[:200]).replace("{sender_name}",org.name)
+        return {"lead_id":lead.id,"recipient":address(lead.email),"subject":demo(template["subject"])[:200],"body":demo(template["body"])+"\n\nDEMO ONLY. Live sending is not available in company trials.","demo_only":True}
     template = get_template(db, lead.organization_id)
     subject = render(template["subject"], lead).replace("\r", " ").replace("\n", " ")[:200]
     url = settings.outreach_public_api_url.rstrip("/") + "/outreach/unsubscribe?token=" + quote(unsubscribe_token(lead.organization_id, address(lead.email)), safe="")
@@ -148,9 +160,9 @@ def fingerprint(messages):
 def status(ctx=Depends(current_membership), db: Session=Depends(get_db)):
     day = datetime.now(timezone.utc).date().isoformat()
     quota = db.get(OutreachQuota, day)
-    used = quota.used if quota else 0
+    used = quota.used if quota and not trial_workspace(db,ctx) else 0
     logs = db.scalars(select(OutreachSend).where(OutreachSend.organization_id == ctx["organization_id"]).order_by(OutreachSend.id.desc()).limit(100)).all()
-    return {"ready": not readiness(), "blockers": readiness(), "daily_cap": cap(), "attempts_today": used,
+    return {"ready": not (readiness()+workspace_blockers(db,ctx)), "blockers": readiness()+workspace_blockers(db,ctx), "daily_cap": cap(), "attempts_today": used,
             "remaining_today": max(0, cap()-used), "quota_day_utc": day, "provider_free_limit": 300,
             "provider_quota_note": "App reservations only; other Brevo activity also consumes its 300/day allowance. Not a delivery count.",
             "template": get_template(db, ctx["organization_id"]),
@@ -187,7 +199,7 @@ def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db))
     token = jwt.encode({"purpose": "outreach-review", "org": ctx["organization_id"], "user": ctx["user"].id,
                         "ids": [m["lead_id"] for m in messages], "digest": fingerprint(messages),
                         "exp": datetime.now(timezone.utc)+timedelta(minutes=10)}, settings.jwt_secret, algorithm="HS256")
-    return {"messages": messages, "skipped": skipped, "review_token": token, "blockers": readiness()+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else []), "sender": {"name": settings.outreach_sender_name, "email": settings.outreach_sender_email}}
+    return {"messages": messages, "skipped": skipped, "review_token": token, "blockers": readiness()+workspace_blockers(db,ctx)+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else []), "sender": {"name": "Your company" if trial_workspace(db,ctx) else settings.outreach_sender_name, "email": "" if trial_workspace(db,ctx) else settings.outreach_sender_email}}
 
 
 def reserve(db, message, org, actor):
@@ -213,7 +225,7 @@ def reserve(db, message, org, actor):
 
 @router.post("/outreach/send")
 def send(data: SendInput, ctx=Depends(admin), db: Session=Depends(get_db)):
-    blockers = readiness()
+    blockers = readiness()+workspace_blockers(db,ctx)
     if blockers: raise HTTPException(409, "; ".join(blockers))
     try:
         reviewed = jwt.decode(data.review_token, settings.jwt_secret, algorithms=["HS256"])
