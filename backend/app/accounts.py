@@ -95,7 +95,7 @@ def analytics(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     from .crm import LeadSales, SalesFeedback
     if ctx["membership"].role not in ("owner","admin"):raise HTTPException(403,"Workspace admin access required")
     org=ctx["organization_id"];today=datetime.now(timezone.utc).date();start=today-timedelta(days=6)
-    leads=db.scalars(select(Lead).where(Lead.organization_id==org)).all()
+    leads=db.scalars(select(Lead).where(Lead.organization_id==org,Lead.source!="assistant_demo")).all()
     counts=Counter(x.status for x in leads)
     recent=[x for x in leads if x.created_at.date()>=start]
     timeline=[]
@@ -105,7 +105,7 @@ def analytics(ctx=Depends(current_membership),db:Session=Depends(get_db)):
         timeline.append({"date":str(day),"new_leads":len(subset),"current_statuses":dict(Counter(x.status for x in subset))})
     members=db.execute(select(User,Membership).join(Membership,User.id==Membership.user_id).where(Membership.organization_id==org,Membership.is_active==True,User.is_active==True)).all()
     assignments=dict(db.execute(select(LeadSales.lead_id,LeadSales.assigned_user_id).join(Lead,Lead.id==LeadSales.lead_id).where(Lead.organization_id==org)).all())
-    feedback=db.scalars(select(SalesFeedback).where(SalesFeedback.organization_id==org)).all()
+    feedback=[x for x in db.scalars(select(SalesFeedback).where(SalesFeedback.organization_id==org)).all() if not x.body.startswith(("🤖","🔥","👤","🚫"))]
     people=[]
     for user,member in members:
         assigned=[x for x in leads if assignments.get(x.id)==user.id]
