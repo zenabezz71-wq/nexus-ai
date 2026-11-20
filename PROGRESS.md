@@ -57,14 +57,22 @@ Not done yet in Phase 1 (next session, in order):
 - [ ] Route-based app shell: fixed collapsible sidebar + header per blueprint,
       /dashboard /leads /contacts /pipeline /tasks /assistant /reports /team
       /settings routes. Keep existing screens working during the split.
-- [ ] RLS verification against live Postgres after Render redeploy (check
+- [x] RLS verified on live Postgres 2026-11-20 (Render deploy
+      dep-dc08eign74is73a5gr4g, commit 21ffaff): all 22 tenant tables have
+      RLS enabled+forced with tenant_isolation policy; no context = 0 rows;
+      org A context sees only A rows; org B sees none and gets API 404 for
+      A's lead; system_context bypass works for webhooks; existing demo data
+      (org 1, 30 leads) intact and reachable. Live RBAC denials verified
+      (sales role: analytics 403, team.manage 403, team.view 200). Demo
+      login end-to-end OK (owner, 16 permissions). Probe orgs deleted.
+- [ ] (superseded - done above) RLS verification after Render redeploy (check
       signup, login, lead list, import, assistant demo all work; if anything
       returns empty, run `alembic downgrade 0005_assistant` on Render shell
       and investigate).
       First deploy attempt (dep-dc08crom7kps73d7smtg) FAILED safe: typo in
       TENANT_TABLES (outreach_suppression -> outreach_suppressions) aborted
       the migration, Render kept the previous deploy live, API never went
-      down. Fixed + drift guard added in the RLS loop.
+      down. Fixed + drift guard added in the RLS loop (commit 21ffaff).
 - [ ] Password change; invitations and password reset need a mail path
       (currently no free verified sender — stub honestly).
 
