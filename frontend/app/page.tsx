@@ -2,6 +2,7 @@
 import {useEffect,useState} from "react";
 import Outreach from "./Outreach";
 import LeadEditor from "./LeadEditor";
+import Assistant from "./Assistant";
 const API=process.env.NEXT_PUBLIC_API_URL||"http://localhost:8000";
 type Lead={id:number;name:string;phone:string;email:string;opted_out:boolean;source:string;status:string;consent:boolean;goal:string};
 type Summary={total_leads:number;eligible_contacts:number;statuses:Record<string,number>};
@@ -34,6 +35,7 @@ export default function Home(){
  <section className="panel"><h2>Import leads</h2><p className="muted">Upload CSV/XLSX. Consent defaults to false; no outreach is triggered.</p><div className="row"><input type="file" accept=".csv,.xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="btn" disabled={!file} onClick={upload}>Import spreadsheet</button></div></section>
  <section className="panel"><h2>Lead intelligence</h2><div className="row" style={{marginBottom:12}}><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, phone or email"/><button className="btn alt" onClick={search}>Search</button><button className="btn alt" onClick={()=>refresh()}>Refresh</button></div><div style={{overflowX:"auto"}}><table><thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Status</th><th>Consent</th><th>Actions</th></tr></thead><tbody>{leads.map(x=><tr key={x.id}><td>{x.name||"—"}</td><td>{x.phone}</td><td>{x.source}</td><td><span className="tag">{x.status}</span></td><td>{x.consent?"Opt-in":"Not recorded"}</td><td><div className="row"><button className="btn alt" onClick={()=>classify(x.id)}>Classify</button><button className="btn alt" onClick={()=>{setEditing(x.id);setTimeout(()=>document.getElementById("lead-editor")?.scrollIntoView({behavior:"smooth"}),100)}}>Edit / feedback</button></div></td></tr>)}{!leads.length&&<tr><td colSpan={6}>No leads yet. Import a CSV/XLSX with a phone column to start. Your workspace never includes another company's leads.</td></tr>}</tbody></table></div></section>
  {editing!==null&&<LeadEditor id={editing} token={token} close={()=>setEditing(null)} changed={()=>refresh()}/>}
+ <Assistant token={token} onOpenLead={setEditing} onChange={()=>refresh()}/>
  <Outreach token={token} leads={leads}/>
  <section className="panel"><h2>Universal lead ingestion</h2><p className="muted">Connect an ad platform, landing page, CRM or automation tool using:</p><code>POST {API}/webhooks/YOUR_SOURCE</code><p className="muted">Authenticated with the workspace Bearer token. See README for JSON schema.</p></section></>}
  <p className="alert" role="status">{note}</p></main></>
