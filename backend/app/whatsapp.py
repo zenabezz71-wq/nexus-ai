@@ -15,9 +15,9 @@ from sqlalchemy import select, update, Integer, String, Text, DateTime, ForeignK
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, Mapped, mapped_column
 from .database import Base, get_db
-from .models import Lead, AuditLog, now
+from .models import Lead, AuditLog, Organization, now
 from .config import settings
-from .outreach import admin, PreviewInput, SendInput, is_demo
+from .outreach import admin, PreviewInput, SendInput, is_demo, trial_workspace, workspace_blockers
 from .auth import current_membership
 
 router = APIRouter()
@@ -100,7 +100,7 @@ def reason(db, lead, preview=False):
     if not number: return "Valid international phone number required"
     # The shipped sample CSV is not permission to message its numbers.
     if not preview and (is_demo(lead) or number in ("201005551234", "201001112233")): return "Demonstration number cannot receive outreach"
-    if db.get(WhatsAppSuppression, number): return "Number is suppressed"
+    if not db.get(Organization,lead.organization_id).trial_only and db.get(WhatsAppSuppression, number): return "Number is suppressed"
     if db.scalar(select(WhatsAppSend.id).where(WhatsAppSend.organization_id == lead.organization_id, WhatsAppSend.recipient == number)): return "Already attempted; no automatic resend"
     return ""
 
@@ -119,17 +119,17 @@ def message(lead, tmpl):
 def status(ctx=Depends(current_membership), db: Session=Depends(get_db)):
     day = datetime.now(timezone.utc).date().isoformat()
     quota = db.get(WhatsAppQuota, day)
-    used = quota.used if quota else 0
+    used = quota.used if quota and not trial_workspace(db,ctx) else 0
     logs = db.scalars(select(WhatsAppSend).where(WhatsAppSend.organization_id == ctx["organization_id"]).order_by(WhatsAppSend.id.desc()).limit(100)).all()
-    return {"ready": not readiness(), "blockers": readiness(), "daily_cap": cap(), "attempts_today": used,
-            "remaining_today": max(0, cap()-used), "quota_day_utc": day, "template_name": settings.whatsapp_template_name,
+    return {"ready": not (readiness()+workspace_blockers(db,ctx)), "blockers": readiness()+workspace_blockers(db,ctx), "daily_cap": cap(), "attempts_today": used,
+            "remaining_today": max(0, cap()-used), "quota_day_utc": day, "template_name": "" if trial_workspace(db,ctx) else settings.whatsapp_template_name,
             "cost_note": "Official Meta marketing messages can cost money. No account or billing setup is created by this app.",
             "logs": [{"lead_id": x.lead_id, "recipient": x.recipient, "status": x.status, "error": x.error, "provider_message_id": x.provider_message_id} for x in logs]}
 
 
 @router.post("/whatsapp/preview")
 def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db)):
-    tmpl = template()
+    tmpl = None if trial_workspace(db,ctx) else template()
     demo_template = tmpl is None
     if demo_template:
         tmpl = {"name": "demo_only_not_approved", "language": "en_US", "text": "DEMO ONLY, not a Meta-approved template. Hello {{1}}, this is an example promotional message. Reply STOP to opt out."}
@@ -143,12 +143,12 @@ def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db))
         else: messages.append(message(lead, tmpl)); numbers.add(phone(lead.phone))
     token = jwt.encode({"purpose": "whatsapp-review", "org": ctx["organization_id"], "user": ctx["user"].id,
         "ids": [m["lead_id"] for m in messages], "digest": digest(messages), "exp": datetime.now(timezone.utc)+timedelta(minutes=10)}, settings.jwt_secret, algorithm="HS256")
-    return {"messages": messages, "skipped": skipped, "review_token": "" if demo_template else token, "blockers": readiness()+(["Illustrative demo only. No approved Meta template is configured"] if demo_template else [])+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else [])}
+    return {"messages": messages, "skipped": skipped, "review_token": "" if demo_template else token, "blockers": readiness()+workspace_blockers(db,ctx)+(["Illustrative demo only. No approved Meta template is configured"] if demo_template else [])+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else [])}
 
 
 @router.post("/whatsapp/send")
 def send(data: SendInput, ctx=Depends(admin), db: Session=Depends(get_db)):
-    blockers = readiness()
+    blockers = readiness()+workspace_blockers(db,ctx)
     if blockers: raise HTTPException(409, "; ".join(blockers))
     try:
         reviewed = jwt.decode(data.review_token, settings.jwt_secret, algorithms=["HS256"])
@@ -156,7 +156,7 @@ def send(data: SendInput, ctx=Depends(admin), db: Session=Depends(get_db)):
         ids = reviewed["ids"]
         if not isinstance(ids, list) or not 1 <= len(ids) <= 20: raise ValueError()
     except (JWTError, KeyError, ValueError): raise HTTPException(400, "Invalid/expired review; preview again")
-    tmpl = template()
+    tmpl = None if trial_workspace(db,ctx) else template()
     messages = []
     for ident in ids:
         lead = db.scalar(select(Lead).where(Lead.id == ident, Lead.organization_id == ctx["organization_id"]))
