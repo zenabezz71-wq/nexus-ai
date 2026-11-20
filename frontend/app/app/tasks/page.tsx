@@ -13,17 +13,20 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filter, setFilter] = useState<"open" | "done" | "all">("open");
+  const [view, setView] = useState<"list" | "calendar">("list");
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", priority: "normal", due_at: "", contact_id: "" });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
 
   async function load() {
-    const qs = filter === "all" ? "" : `?status=${filter === "open" ? "open" : "done"}`;
+    const effective = view === "calendar" ? "all" : filter;
+    const qs = effective === "all" ? "" : `?status=${effective === "open" ? "open" : "done"}`;
     const [ts, cs] = await Promise.all([apiFetch("/tasks" + qs), apiFetch("/contacts")]);
     setTasks(ts); setContacts(cs);
   }
-  useEffect(() => { load().catch((e) => setNote(e.message)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter]);
+  useEffect(() => { load().catch((e) => setNote(e.message)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter, view]);
 
   const contactName = (id: number | null) => (id == null ? "" : contacts.find((c) => c.id === id)?.name || "");
 
@@ -86,13 +89,54 @@ export default function TasksPage() {
           <div className="row" style={{ marginTop: 12 }}><button className="btn" type="submit">Create task</button></div>
         </form>
       )}
-      <div className="row" style={{ margin: "10px 0" }}>
-        {(["open", "done", "all"] as const).map((f) => (
-          <button key={f} type="button" className={"btn " + (filter === f ? "" : "alt")} onClick={() => setFilter(f)}>
-            {f[0].toUpperCase() + f.slice(1)}
-          </button>
-        ))}
+      <div className="row" style={{ margin: "10px 0", justifyContent: "space-between" }}>
+        <div className="row">
+          {(["open", "done", "all"] as const).map((f) => (
+            <button key={f} type="button" className={"btn " + (filter === f && view === "list" ? "" : "alt")} onClick={() => { setFilter(f); setView("list"); }}>
+              {f[0].toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="row">
+          <button type="button" className={"btn " + (view === "list" ? "" : "alt")} onClick={() => setView("list")}>List</button>
+          <button type="button" className={"btn " + (view === "calendar" ? "" : "alt")} onClick={() => setView("calendar")}>Calendar</button>
+        </div>
       </div>
+      {view === "calendar" && (
+        <div className="panel" style={{ margin: "0 0 12px" }}>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+            <button className="btn alt mini" type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))}>◀</button>
+            <strong>{calMonth.toLocaleString(undefined, { month: "long", year: "numeric" })}</strong>
+            <button className="btn alt mini" type="button" onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))}>▶</button>
+          </div>
+          <div className="cal-grid">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d} className="cal-head">{d}</div>)}
+            {(() => {
+              const first = new Date(calMonth);
+              const startPad = first.getDay();
+              const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+              const today = new Date(); const todayKey = today.toDateString();
+              const cells = [];
+              for (let i = 0; i < startPad; i++) cells.push(<div key={"pad" + i} />);
+              for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(calMonth.getFullYear(), calMonth.getMonth(), day);
+                const dayTasks = tasks.filter((t) => t.due_at && new Date(t.due_at).toDateString() === date.toDateString());
+                cells.push(
+                  <div key={day} className={"cal-cell" + (date.toDateString() === todayKey ? " cal-today" : "")}>
+                    <span className="cal-day">{day}</span>
+                    {dayTasks.map((t) => (
+                      <span key={t.id} className={"cal-chip" + (t.status === "done" ? " done" : overdue(t) ? " overdue" : "")} title={t.title}>{t.title}</span>
+                    ))}
+                  </div>
+                );
+              }
+              return cells;
+            })()}
+          </div>
+          <small className="muted">Tasks without a due date do not appear on the calendar.</small>
+        </div>
+      )}
+      {view === "list" && (
       <div className="panel" style={{ margin: 0 }}>
         <table>
           <thead><tr><th>Task</th><th>Contact</th><th>Priority</th><th>Due</th><th>Status</th><th></th></tr></thead>
@@ -123,6 +167,7 @@ export default function TasksPage() {
           </tbody>
         </table>
       </div>
+      )}
     </>
   );
 }

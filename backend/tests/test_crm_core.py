@@ -171,3 +171,18 @@ def test_stage_management_requires_settings_permission(client):
     h2 = signup(client, "crm-stages3@example.com", "CRM Stages3")
     r = client.patch(f"/stages/{pipe['stages'][0]['id']}", json={"name": "Hijack"}, headers=h2)
     assert r.status_code == 404
+
+
+def test_contacts_export(client):
+    h = signup(client, "crm-exp@example.com", "CRM Exp")
+    client.post("/contacts", json={"name": "Exp One", "phone": "+201000000009", "tags": ["vip"]}, headers=h)
+    r = client.get("/contacts/export", headers=h)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/csv")
+    lines = r.text.strip().splitlines()
+    assert lines[0].startswith("name,phone,email")
+    assert "Exp One" in lines[1] and "vip" in lines[1]
+    org = client.get("/auth/me", headers=h).json()["organization_id"]
+    add_member(org, "crm-exp-sales@example.com", "sales")
+    mh = login(client, "crm-exp-sales@example.com")
+    assert client.get("/contacts/export", headers=mh).status_code == 403

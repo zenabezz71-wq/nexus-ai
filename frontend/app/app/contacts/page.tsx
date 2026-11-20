@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { apiFetch, fmtDate, fmtDateTime, Me } from "../../lib/api";
+import { API, apiFetch, fmtDate, fmtDateTime, Me } from "../../lib/api";
 
 type Contact = {
   id: number; name: string; phone: string; email: string; company: string;
@@ -45,6 +45,23 @@ export default function ContactsPage() {
   }, []);
 
   const canDelete = me ? (me.permissions ? me.permissions.includes("contacts.view_all") : ["owner", "admin"].includes(me.role)) : false;
+  const canExport = me ? (me.permissions ? me.permissions.includes("contacts.export") : ["owner", "admin"].includes(me.role)) : false;
+
+  async function exportCsv() {
+    setBusy(true); setNote("");
+    try {
+      const token = localStorage.getItem("nexus_token") || "";
+      const r = await fetch(API + "/contacts/export", { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error(`Export failed (${r.status})`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "nexus-contacts.csv"; a.click();
+      URL.revokeObjectURL(url);
+      setNote("Contacts exported to CSV.");
+    } catch (err) { setNote(err instanceof Error ? err.message : "Export failed"); }
+    finally { setBusy(false); }
+  }
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setNote("");
@@ -102,7 +119,10 @@ export default function ContactsPage() {
     <>
       <div className="workspace-heading">
         <div><span className="eyebrow">CRM</span><h1 style={{ margin: "6px 0" }}>Contacts</h1></div>
-        <button className="btn" type="button" onClick={() => { setCreating(!creating); setForm(EMPTY); }}>{creating ? "Close" : "New contact"}</button>
+        <div className="row">
+          {canExport && <button className="btn alt" type="button" disabled={busy} onClick={exportCsv}>Export CSV</button>}
+          <button className="btn" type="button" onClick={() => { setCreating(!creating); setForm(EMPTY); }}>{creating ? "Close" : "New contact"}</button>
+        </div>
       </div>
       {note && <p className="alert" role="status">{note}</p>}
       {creating && (

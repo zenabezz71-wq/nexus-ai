@@ -14,7 +14,7 @@ from .database import get_db
 from .auth import current_membership
 from .models import Lead, AuditLog
 from .tenant import Contact, Pipeline, PipelineStage, Deal, Task, Activity
-from .rbac import has_permission, CONTACTS_VIEW_ALL, DEALS_DELETE, COMPANY_SETTINGS
+from .rbac import has_permission, CONTACTS_VIEW_ALL, CONTACTS_EXPORT, DEALS_DELETE, COMPANY_SETTINGS
 
 router = APIRouter()
 
@@ -321,6 +321,28 @@ def create_contact(data: ContactInput, ctx=Depends(current_membership), db: Sess
     log_activity(db, ctx, "contact.created", f"Contact created: {c.name}", contact_id=c.id)
     db.commit()
     return contact_view(c)
+
+
+@router.get("/contacts/export")
+def export_contacts(ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    """CSV export of the contacts the caller can see. Requires the contacts.export permission."""
+    if not has_permission(ctx["membership"], CONTACTS_EXPORT):
+        raise HTTPException(403, "This action requires the permission: " + CONTACTS_EXPORT)
+    import csv
+    import io as _io
+    rows = db.scalars(select(Contact).where(visible(Contact, ctx), Contact.deleted_at.is_(None)).order_by(Contact.name, Contact.id)).all()
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["name", "phone", "email", "company", "position", "source", "priority", "tags", "assigned_to", "created_at"])
+    for c in rows:
+        w.writerow([c.name, c.phone, c.email, c.company, c.position, c.source, c.priority,
+                    ";".join(c.tags or []), c.assigned_to or "", c.created_at.isoformat() if c.created_at else ""])
+    db.add(AuditLog(organization_id=ctx["organization_id"], actor_user_id=ctx["user"].id,
+                    action="contact.exported", details={"rows": len(rows)}))
+    db.commit()
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(buf.getvalue(), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=nexus-contacts.csv"})
 
 
 @router.get("/contacts/{contact_id}")

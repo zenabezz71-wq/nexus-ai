@@ -169,3 +169,12 @@ free), integrations hub, billing enforcement, launch hardening.
 - /app is now the dashboard (previously redirected to /app/contacts): KPI cards, period switcher, insights card, deals-at-risk and tasks panels, team performance table, top lead sources. Sidebar Dashboard link fixed to /app.
 
 **Verified live as the owner:** endpoint returns company scope with real counts; page renders and period switch works. Backend tests: 63 passed.
+
+## 2026-11-21 — Phase 3 slice: contacts CSV export + tasks calendar view
+
+**Shipped:**
+- GET /contacts/export: CSV export of the contacts the caller can see, gated on the contacts.export permission (owner/admin by default), with a contacts.exported audit log entry recording the row count.
+- /app/contacts: Export CSV button, visible only when the signed-in member holds contacts.export.
+- /app/tasks: List/Calendar view toggle. Calendar is a month grid with prev/next navigation; tasks appear on their due date, overdue outlined red, done struck through, today highlighted. Tasks without a due date are noted as excluded.
+
+**Backend tests: 64 passed.** TypeScript compiles clean.
