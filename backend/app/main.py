@@ -13,6 +13,7 @@ from .normalization import normalize_headers,normalize_phone,parse_bool
 from .agents import classify
 from .outreach import router as outreach_router
 from .whatsapp import router as whatsapp_router
+from .crm import router as crm_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -31,6 +32,7 @@ async def lifespan(app):
 app=FastAPI(title="NEXUS AI API",version="1.0.0",lifespan=lifespan)
 app.include_router(outreach_router)
 app.include_router(whatsapp_router)
+app.include_router(crm_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
