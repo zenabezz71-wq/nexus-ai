@@ -23,4 +23,6 @@ def current_membership(token:str=Depends(oauth),db:Session=Depends(get_db)):
     if not user or not user.is_active: raise err
     membership=db.scalar(select(Membership).where(Membership.user_id==uid,Membership.is_active==True).order_by(Membership.id))
     if not membership: raise HTTPException(403,"No active organization membership")
+    from .rls import org_context
+    org_context(db,membership.organization_id)
     return {"user":user,"membership":membership,"organization_id":membership.organization_id}

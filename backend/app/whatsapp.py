@@ -219,6 +219,10 @@ async def webhook(request: Request, db: Session=Depends(get_db)):
     if not hmac.compare_digest(request.headers.get("x-hub-signature-256", ""), expected): raise HTTPException(403, "Invalid signature")
     try: payload = json.loads(raw)
     except ValueError: raise HTTPException(400, "Invalid JSON")
+    # Signature-verified system actor: STOP opt-outs and delivery status updates
+    # intentionally span workspaces (suppression is global by phone number).
+    from .rls import system_context
+    system_context(db)
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value", {})

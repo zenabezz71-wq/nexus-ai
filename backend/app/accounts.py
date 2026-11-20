@@ -66,8 +66,9 @@ def limit_auth(db,request,kind,email=""):
     db.query(AuthRateBucket).filter(AuthRateBucket.expires_at<now-86400).delete(synchronize_session=False);db.commit()
 
 def session_payload(db,user,membership):
+    from .rbac import permissions_for
     org=db.get(Organization,membership.organization_id)
-    return {"access_token":token_for(user.id),"token_type":"bearer","user":{"id":user.id,"email":user.email,"name":user.full_name},"organization":{"id":org.id,"name":org.name,"role":membership.role,"trial_only":org.trial_only}}
+    return {"access_token":token_for(user.id),"token_type":"bearer","user":{"id":user.id,"email":user.email,"name":user.full_name},"organization":{"id":org.id,"name":org.name,"role":membership.role,"trial_only":org.trial_only},"permissions":permissions_for(membership.role,membership.grants or [])}
 
 @router.post("/auth/signup",status_code=201)
 def signup(data:SignupInput,request:Request,db:Session=Depends(get_db)):
@@ -79,6 +80,8 @@ def signup(data:SignupInput,request:Request,db:Session=Depends(get_db)):
     user=User(email=data.email,full_name=data.full_name,password_hash=hash_password(data.password))
     try:
         db.add_all([org,user]);db.flush()
+        from .rls import org_context
+        org_context(db,org.id)
         membership=Membership(user_id=user.id,organization_id=org.id,role="owner")
         db.add(membership)
         db.add(AuditLog(organization_id=org.id,actor_user_id=user.id,action="account.signup",details={"mode":"company_trial"}))
@@ -93,7 +96,8 @@ def analytics(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     from datetime import timedelta
     from .models import Lead
     from .crm import LeadSales, SalesFeedback
-    if ctx["membership"].role not in ("owner","admin"):raise HTTPException(403,"Workspace admin access required")
+    from .rbac import has_permission, REPORTS_COMPANY
+    if not has_permission(ctx["membership"],REPORTS_COMPANY):raise HTTPException(403,"This action requires the permission: "+REPORTS_COMPANY)
     org=ctx["organization_id"];today=datetime.now(timezone.utc).date();start=today-timedelta(days=6)
     leads=db.scalars(select(Lead).where(Lead.organization_id==org,Lead.source!="assistant_demo")).all()
     counts=Counter(x.status for x in leads)

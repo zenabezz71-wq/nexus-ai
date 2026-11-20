@@ -468,6 +468,8 @@ async def assistant_webhook(request: Request, db: Session=Depends(get_db)):
     org = db.get(Organization, settings.assistant_whatsapp_org_id)
     user_id = owner_user_id(db, org.id) if org else None
     if not org or not user_id: raise HTTPException(503, "Mapped workspace is unavailable")
+    from .rls import org_context
+    org_context(db, org.id)
     handled = 0
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):

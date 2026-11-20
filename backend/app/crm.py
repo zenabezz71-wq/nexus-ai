@@ -17,6 +17,7 @@ router = APIRouter()
 class LeadSales(Base):
     __tablename__ = "lead_sales"
     lead_id: Mapped[int] = mapped_column(ForeignKey("leads.id"), primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 class SalesFeedback(Base):
@@ -107,7 +108,7 @@ def edit_lead(lead_id: int, data: LeadPatch, ctx=Depends(current_membership), db
         if number and not db.get(Organization,lead.organization_id).trial_only and not db.get(WhatsAppSuppression, number): db.add(WhatsAppSuppression(recipient=number))
     if "assigned_user_id" in fields:
         assignment = db.get(LeadSales, lead.id)
-        if not assignment: assignment = LeadSales(lead_id=lead.id); db.add(assignment)
+        if not assignment: assignment = LeadSales(lead_id=lead.id, organization_id=lead.organization_id); db.add(assignment)
         assignment.assigned_user_id = data.assigned_user_id
     lead.updated_at = now()
     db.add(AuditLog(organization_id=lead.organization_id, actor_user_id=ctx["user"].id, action="lead.edited", details={"lead_id": lead.id, "fields": sorted(fields), "contact_changed_consent_reset": contact_changed, "do_not_contact": data.do_not_contact}))

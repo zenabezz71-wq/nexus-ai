@@ -24,6 +24,7 @@ class Membership(Base):
     user_id:Mapped[int]=mapped_column(ForeignKey("users.id",ondelete="CASCADE"))
     organization_id:Mapped[int]=mapped_column(ForeignKey("organizations.id",ondelete="CASCADE"),index=True)
     role:Mapped[str]=mapped_column(String(30),default="member")
+    grants:Mapped[list]=mapped_column(JSON,default=list,server_default="[]")
     is_active:Mapped[bool]=mapped_column(Boolean,default=True)
     __table_args__=(UniqueConstraint("user_id","organization_id"),)
 class Lead(Base):

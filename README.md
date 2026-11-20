@@ -1,5 +1,7 @@
 # NEXUS AI
 
+Product rebuild against the 12-week blueprint is underway: see AUDIT.md (Phase 0 audit: keep / develop / rebuild) and PROGRESS.md (current status, next steps, operational notes).
+
 A local-development SaaS starter for managing and classifying leads. Includes a Next.js dashboard, FastAPI backend, PostgreSQL with Alembic migrations, a Redis service, JWT login, workspace-scoped records, CSV/XLSX imports, and an authenticated lead-ingestion endpoint.
 
 This is a development foundation, not a finished or security-audited production service. Creating a GitHub repository does not deploy a running website.

@@ -16,6 +16,9 @@ from .whatsapp import router as whatsapp_router
 from .crm import router as crm_router
 from .assistant import router as assistant_router, DEMO_SOURCE
 from .accounts import router as accounts_router, session_payload, limit_auth, LoginInput
+from .team import router as team_router
+from . import rls as _rls  # registers the tenant-context session listener
+from . import tenant as _tenant_models  # registers Phase 1 tables on Base.metadata
 from fastapi import Request
 from .agents import baseline
 
@@ -39,6 +42,7 @@ app.include_router(whatsapp_router)
 app.include_router(crm_router)
 app.include_router(accounts_router)
 app.include_router(assistant_router)
+app.include_router(team_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
@@ -53,8 +57,10 @@ def login(data:LoginInput,request:Request,db:Session=Depends(get_db)):
     return session_payload(db,user,membership)
 @app.get("/auth/me")
 def me(ctx=Depends(current_membership),db:Session=Depends(get_db)):
+    from .rbac import permissions_for
     org=db.get(Organization,ctx["organization_id"])
-    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":ctx["membership"].role}
+    m=ctx["membership"]
+    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":m.role,"grants":m.grants or [],"permissions":permissions_for(m.role,m.grants or [])}
 @app.get("/dashboard/summary")
 def summary(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     org=ctx["organization_id"]; total=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org,Lead.source!=DEMO_SOURCE)) or 0

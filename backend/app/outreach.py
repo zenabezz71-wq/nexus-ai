@@ -293,6 +293,8 @@ def unsubscribe_page(token: str):
 @router.post("/outreach/unsubscribe", response_class=HTMLResponse)
 def unsubscribe(token: str=Form(...), db: Session=Depends(get_db)):
     data = decode_unsubscribe(token)
+    from .rls import org_context
+    org_context(db, data["org"])
     key = (data["org"], data["email"])
     if not db.get(OutreachSuppression, key):
         try:
