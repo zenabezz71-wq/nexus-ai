@@ -15,6 +15,8 @@ export default function PlatformPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
+  const [pending, setPending] = useState<{ org: Org; action: "suspend" | "restore" | "delete" } | null>(null);
+  const [reason, setReason] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
@@ -43,34 +45,44 @@ export default function PlatformPage() {
   async function load(t: string) {
     try {
       const me = await req("/auth/me", {}, t);
-      if (!me.is_platform_admin) { setAllowed(false); return; }
+      if (!me.is_platform_admin) { window.location.replace("/"); return; }
       setAllowed(true);
       setOrgs(await req("/platform/organizations", {}, t));
-    } catch (e) { setAllowed(false); setNote(e instanceof Error ? e.message : "Could not load."); }
+    } catch {
+      // Expired or invalid session: sign in again from the main page.
+      localStorage.removeItem("nexus_token");
+      window.location.replace("/");
+    }
   }
 
   useEffect(() => {
     const t = localStorage.getItem("nexus_token");
-    if (!t) { setAllowed(false); setNote("Sign in from the main page first."); return; }
+    if (!t) { window.location.replace("/"); return; }
     setToken(t);
     load(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function act(o: Org, action: "suspend" | "restore" | "delete") {
-    const verbs = { suspend: "Suspend", restore: "Restore", delete: "DELETE (soft-delete, restorable)" } as const;
-    const reason = window.prompt(`${verbs[action]} workspace "${o.name}"?\nReason (required, written to the audit log):`);
-    if (!reason || reason.trim().length < 3) { setNote("Action cancelled: a reason of 3+ characters is required."); return; }
-    if (action === "delete" && !window.confirm(`Confirm soft-delete of "${o.name}" (${o.member_count} member(s), ${o.lead_count} lead(s)). Members are locked out immediately. Data is retained and restorable.`)) return;
+  function ask(o: Org, action: "suspend" | "restore" | "delete") {
+    setPending({ org: o, action });
+    setReason("");
+    setNote("");
+  }
+
+  async function confirmAct() {
+    if (!pending) return;
+    const { org: o, action } = pending;
+    if (reason.trim().length < 3) { setNote("A reason of 3+ characters is required; it is written to the audit log."); return; }
     setBusy(o.id);
     try {
       if (action === "delete") {
         await req(`/platform/organizations/${o.id}?reason=${encodeURIComponent(reason.trim())}`, { method: "DELETE" });
-        setNote(`Soft-deleted "${o.name}". Restorable via the restore action.`);
+        setNote(`Soft-deleted "${o.name}". Data retained and restorable with the Restore action.`);
       } else {
         await req(`/platform/organizations/${o.id}/${action}`, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
         setNote(`${action === "suspend" ? "Suspended" : "Restored"} "${o.name}".`);
       }
+      setPending(null);
       setOrgs(await req("/platform/organizations"));
     } catch (e) { setNote(e instanceof Error ? e.message : "Action failed"); }
     finally { setBusy(null); }
@@ -89,15 +101,8 @@ export default function PlatformPage() {
         </div>
       </header>
       <main className="shell">
-        {allowed === null ? (
+        {allowed !== true ? (
           <section className="panel auth-panel"><h1>Loading...</h1></section>
-        ) : !allowed ? (
-          <section className="panel auth-panel">
-            <span className="eyebrow">RESTRICTED</span>
-            <h1>Platform operators only.</h1>
-            <p className="muted">This area manages tenant workspaces across the whole platform. Your account is not flagged as a platform operator.</p>
-            <a className="btn alt" href="/">Back to my workspace</a>
-          </section>
         ) : (
           <>
             <section className="panel workspace-heading">
@@ -123,9 +128,9 @@ export default function PlatformPage() {
                         <td className="muted">{o.created_at ? o.created_at.slice(0, 10) : "—"}</td>
                         <td>
                           <div className="row">
-                            {!o.deleted_at && o.is_active && <button className="btn alt" disabled={busy === o.id} onClick={() => act(o, "suspend")}>Suspend</button>}
-                            {(o.deleted_at || !o.is_active) && <button className="btn alt" disabled={busy === o.id} onClick={() => act(o, "restore")}>Restore</button>}
-                            {!o.deleted_at && <button className="btn alt" disabled={busy === o.id} onClick={() => act(o, "delete")}>Delete</button>}
+                            {!o.deleted_at && o.is_active && <button className="btn alt" disabled={busy === o.id} onClick={() => ask(o, "suspend")}>Suspend</button>}
+                            {(o.deleted_at || !o.is_active) && <button className="btn alt" disabled={busy === o.id} onClick={() => ask(o, "restore")}>Restore</button>}
+                            {!o.deleted_at && <button className="btn alt" disabled={busy === o.id} onClick={() => ask(o, "delete")}>Delete</button>}
                           </div>
                         </td>
                       </tr>
@@ -136,6 +141,28 @@ export default function PlatformPage() {
               </div>
             </section>
           </>
+        )}
+        {pending && (
+          <section className="panel auth-panel">
+            <span className="eyebrow">CONFIRM {pending.action.toUpperCase()}</span>
+            <h1>{pending.action === "delete" ? `Delete "${pending.org.name}"?` : pending.action === "suspend" ? `Suspend "${pending.org.name}"?` : `Restore "${pending.org.name}"?`}</h1>
+            <p className="muted">
+              {pending.action === "delete"
+                ? `Soft-delete: ${pending.org.member_count} member(s) are locked out immediately; ${pending.org.lead_count} lead(s) and all data are retained and restorable. Written to the audit log.`
+                : pending.action === "suspend"
+                ? `${pending.org.member_count} member(s) are locked out until you restore the workspace. Written to the audit log.`
+                : "Members can sign in again immediately. Written to the audit log."}
+            </p>
+            <label>Reason (required, min 3 characters)
+              <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="Why are you doing this?" autoFocus />
+            </label>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn" disabled={busy === pending.org.id || reason.trim().length < 3} onClick={confirmAct}>
+                {pending.action === "delete" ? "Yes, delete this workspace" : pending.action === "suspend" ? "Yes, suspend" : "Yes, restore"}
+              </button>
+              <button className="btn alt" onClick={() => setPending(null)}>Cancel</button>
+            </div>
+          </section>
         )}
         {note && <p className="alert" role="status">{note}</p>}
       </main>
