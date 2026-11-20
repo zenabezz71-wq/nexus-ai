@@ -32,9 +32,9 @@ export default function SalesStudio(){
  const field=(key:keyof SalesFacts,label:string,placeholder:string)=><label style={{display:"flex",flexDirection:"column",gap:8,fontSize:14}} key={key}>{label}<input style={{width:"100%",minWidth:0}} maxLength={key==="product"?100:300} value={facts[key]} placeholder={placeholder} onChange={e=>{setFacts({...facts,[key]:e.target.value});invalidate()}}/></label>;
  return <section id="sales-studio" className="panel" dir="rtl" lang="ar" style={{scrollMarginTop:20,padding:24}}>
   <span className="eyebrow" dir="ltr">EGYPTIAN SALES REPLY STUDIO</span><h2 style={{fontSize:26,marginBottom:8}}>من اعتراض العميل لرد جاهز للمراجعة</h2>
-  <p style={{lineHeight:1.9,color:"#536487",maxWidth:780}}>اكتب حقائق منتجك، واختار الموقف. جهّز مسودة بالمصري أو بالفصحى من غير ما نخترع سعر أو خصم أو ميعاد توصيل. جرّب فوراً، من غير حساب أو ربط واتساب.</p>
+  <p style={{lineHeight:1.9,color:"var(--muted)",maxWidth:780}}>اكتب حقائق منتجك، واختار الموقف. جهّز مسودة بالمصري أو بالفصحى من غير ما نخترع سعر أو خصم أو ميعاد توصيل. جرّب فوراً، من غير حساب أو ربط واتساب.</p>
   <p className="tag" style={{display:"inline-block",lineHeight:1.8}}>أداة قوالب محلية، مش ذكاء اصطناعي توليدي. لا تحفظ المدخلات ولا ترسل رسائل أو بيانات لأي خادم.</p>
-  <div className="row" style={{margin:"12px 0 20px"}}><button type="button" className="btn alt" onClick={sample}>جرّب بيانات مثال</button><button type="button" className="btn alt" onClick={reset}>مسح البيانات</button>{demo&&<strong style={{color:"#805600"}}>بيانات تجريبية فقط، مش عرض بيع حقيقي</strong>}</div>
+  <div className="row" style={{margin:"12px 0 20px"}}><button type="button" className="btn alt" onClick={sample}>جرّب بيانات مثال</button><button type="button" className="btn alt" onClick={reset}>مسح البيانات</button>{demo&&<strong style={{color:"var(--warn-text)"}}>بيانات تجريبية فقط، مش عرض بيع حقيقي</strong>}</div>
   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,260px),1fr))",gap:24}}>
    <div style={{display:"grid",gap:16,alignContent:"start"}}>
     {field("product","المنتج أو الخدمة","مثال: اسم المنتج")}{field("price","السعر المؤكد مع العملة (اختياري)","مثال: ٣٥٠ جنيه مصري، شامل الضريبة")}{field("delivery","تكلفة ومدة ونطاق التوصيل المؤكدة (اختياري)","اكتب التفاصيل المؤكدة فقط")}{field("policy","ميزة أو سياسة مؤكدة (اختياري)","بلاش وعود أو ضمانات غير مؤكدة")}
@@ -42,17 +42,17 @@ export default function SalesStudio(){
     <label style={{display:"grid",gap:8}}>أسلوب الرد<select value={formal?"formal":"egyptian"} onChange={e=>{setFormal(e.target.value==="formal");invalidate()}}><option value="egyptian">مصري بسيط</option><option value="formal">عربي فصحى</option></select></label>
     <button className="btn" type="button" onClick={()=>{const r=salesReply(facts,scenario,formal);setResult(r);setDraft(r.text);setNotice("")}}>جهّز مسودة الرد</button>
    </div>
-   <div style={{background:"#f5f7ff",borderRadius:14,padding:20,minWidth:0}}>
-    <h3 style={{marginTop:0}}>مسودتك تحت سيطرتك</h3>{!result?<p style={{lineHeight:1.9,color:"#536487"}}>اختار موقف واضغط &quot;جهّز مسودة الرد&quot;. لو في معلومة ناقصة هنوضحها بدل ما نخمنها. استخدم بيانات منتج فقط، من غير بيانات عملاء شخصية.</p>:<>
+   <div style={{background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:14,padding:20,minWidth:0}}>
+    <h3 style={{marginTop:0}}>مسودتك تحت سيطرتك</h3>{!result?<p style={{lineHeight:1.9,color:"var(--muted)"}}>اختار موقف واضغط &quot;جهّز مسودة الرد&quot;. لو في معلومة ناقصة هنوضحها بدل ما نخمنها. استخدم بيانات منتج فقط، من غير بيانات عملاء شخصية.</p>:<>
      {demo&&<p className="alert">المسودة مبنية على مثال تجريبي. لا تستخدم أسعار أو سياسات المثال مع عميل حقيقي.</p>}
      {result.missing.length>0&&<p className="alert" role="status">معلومات محتاجة تأكيد: {result.missing.join("، ")}. الرد لا يؤكد التفاصيل الناقصة.</p>}
-     <label style={{display:"grid",gap:8}}>راجع وعدّل قبل النسخ<textarea rows={9} value={draft} onChange={e=>{setDraft(e.target.value);setNotice("")}} style={{width:"100%",lineHeight:1.9,resize:"vertical",background:"#fff"}}/></label>
+     <label style={{display:"grid",gap:8}}>راجع وعدّل قبل النسخ<textarea rows={9} value={draft} onChange={e=>{setDraft(e.target.value);setNotice("")}} style={{width:"100%",lineHeight:1.9,resize:"vertical"}}/></label>
      <p style={{fontSize:13,lineHeight:1.8}}>مصدر تفاصيل القالب: {result.facts.length?result.facts.join("، ")+" من مدخلاتك فقط.":"صياغة عامة، بلا سعر أو وعد مضاف."} التعديلات اليدوية مسؤوليتك في المراجعة.</p>
      {scenario==="stop"&&<p className="alert">مهم: الأداة لا تغيّر سجل العميل ولا توقف حملاتك. سجّل إلغاء الاشتراك وامنع التواصل في نظامك قبل استخدام المسودة.</p>}
      {scenario==="later"&&<p className="muted">طلب موافقة فقط. لا تنشئ هذه الأداة تذكيراً أو متابعة تلقائية.</p>}
      <button className="btn" type="button" disabled={!draft.trim()} onClick={copy}>نسخ المسودة فقط</button>
     </>}<p role="status" style={{minHeight:24,lineHeight:1.8}}>{notice}</p>
-    <p style={{fontSize:12,lineHeight:1.9,color:"#536487"}}>مفيش إرسال تلقائي أو ربط بالـCRM في الأداة دي. لا تؤكد توافر المنتج أو تسجيل الطلب إلا بعد مراجعة فعلية. إعادة تحميل الصفحة تمسح المدخلات.</p>
+    <p style={{fontSize:12,lineHeight:1.9,color:"var(--muted)"}}>مفيش إرسال تلقائي أو ربط بالـCRM في الأداة دي. لا تؤكد توافر المنتج أو تسجيل الطلب إلا بعد مراجعة فعلية. إعادة تحميل الصفحة تمسح المدخلات.</p>
    </div>
   </div>
  </section>

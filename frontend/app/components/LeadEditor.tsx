@@ -48,7 +48,7 @@ export default function LeadEditor({ id, token, close, changed }: { id: number; 
         <label>New feedback<textarea style={{ display: "block", width: "100%", minHeight: 90, margin: "8px 0" }} value={feedback} maxLength={5000} onChange={e => setFeedback(e.target.value)} required placeholder="Call outcome, objections, agreed next step..." /></label>
         <button type="submit" className="btn alt" disabled={busy || dirty || suppress || !feedback.trim()}>Add sales feedback</button>
       </form>
-      <div style={{ maxHeight: 360, overflowY: "auto", marginTop: 16 }}>{lead.feedback.map(f => <article key={f.id} style={{ borderTop: "1px solid #e2e7ef", padding: "12px 0" }}><strong>{f.author}</strong><span className="muted"> · {new Date(f.created_at).toLocaleString()}</span><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.body}</p></article>)}{!lead.feedback.length && <p className="muted">No sales feedback yet.</p>}</div>
+      <div style={{ maxHeight: 360, overflowY: "auto", marginTop: 16 }}>{lead.feedback.map(f => <article key={f.id} style={{ borderTop: "1px solid var(--border)", padding: "12px 0" }}><strong>{f.author}</strong><span className="muted"> · {new Date(f.created_at).toLocaleString()}</span><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.body}</p></article>)}{!lead.feedback.length && <p className="muted">No sales feedback yet.</p>}</div>
       {note && <p className="alert" role="status">{note}</p>}
     </>}
   </section>;
