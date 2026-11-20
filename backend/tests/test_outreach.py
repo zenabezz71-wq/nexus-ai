@@ -59,7 +59,7 @@ def test_default_off(client, h):
 def test_missing_consent_invalid_and_sample_rejected(client, h):
     ids = [lead(client, h, consent=False), lead(client, h, phone="+201012345679", email="bad\r\n@bad.com"), lead(client, h, phone="+201012345680", email="sample@example.com")]
     p = client.post("/outreach/preview", headers=h, json={"lead_ids": ids}).json()
-    assert not p["messages"] and len(p["skipped"]) == 3
+    assert len(p["messages"]) == 1 and p["messages"][0]["demo_only"] and len(p["skipped"]) == 2
 
 
 def test_success_dedup_and_audit(client, h, configured, monkeypatch):
@@ -170,4 +170,13 @@ def test_wa_unsupported_template_blocks(client, h, wa_configured, monkeypatch):
 def test_wa_not_configured_preview_is_honest(client, h):
     ident = lead(client, h)
     p = preview(client, h, ident, "/whatsapp")
-    assert not p["messages"] and not p["review_token"] and p["blockers"]
+    assert p["messages"][0]["demo_only"] and not p["review_token"] and p["blockers"]
+
+
+def test_demo_contacts_can_preview_but_never_send(client, h, configured, wa_configured):
+    ident = lead(client, h, email="sample@example.com", name="Demo Person")
+    for path in ("/outreach", "/whatsapp"):
+        p = preview(client, h, ident, path)
+        assert p["messages"][0]["demo_only"]
+        assert any("preview-only" in x for x in p["blockers"])
+        assert send(client, h, p, path).status_code == 409
