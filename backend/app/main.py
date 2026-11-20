@@ -11,6 +11,8 @@ from .models import Organization,User,Membership,Lead,AuditLog
 from .auth import hash_password,verify_password,token_for,current_membership
 from .normalization import normalize_headers,normalize_phone,parse_bool
 from .agents import classify
+from .outreach import router as outreach_router
+from .whatsapp import router as whatsapp_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -27,6 +29,8 @@ async def lifespan(app):
     finally:db.close()
     yield
 app=FastAPI(title="NEXUS AI API",version="1.0.0",lifespan=lifespan)
+app.include_router(outreach_router)
+app.include_router(whatsapp_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
@@ -53,7 +57,7 @@ def leads(status:str|None=None,q:str|None=None,limit:int=100,ctx=Depends(current
     if status:stmt=stmt.where(Lead.status==status)
     if q:
         term=f"%{q}%";stmt=stmt.where((Lead.name.ilike(term))|(Lead.phone.ilike(term))|(Lead.email.ilike(term)))
-    return [{"id":x.id,"name":x.name,"phone":x.phone,"email":x.email,"source":x.source,"status":x.status,"consent":x.consent,"currency":x.currency,"amount":x.amount,"goal":x.goal} for x in db.scalars(stmt.limit(min(max(limit,1),500))).all()]
+    return [{"id":x.id,"name":x.name,"phone":x.phone,"email":x.email,"source":x.source,"status":x.status,"consent":x.consent,"opted_out":x.opted_out,"currency":x.currency,"amount":x.amount,"goal":x.goal} for x in db.scalars(stmt.limit(min(max(limit,1),500))).all()]
 @app.post("/leads/import")
 async def import_leads(file:UploadFile=File(...),ctx=Depends(current_membership),db:Session=Depends(get_db)):
     name=(file.filename or "").lower();raw=await file.read()
