@@ -160,3 +160,12 @@ free), integrations hub, billing enforcement, launch hardening.
 **Verified live as the owner:** stage add/rename/move/delete (feed recorded each), lead import + convert (contact created, converted badge, no Convert button afterwards), deal create + stage change + note (timeline and /app/activity show all), contacts?open= deep link. Test data removed afterwards (deal, contact, lead).
 
 **Backend tests: 61 passed.**
+
+## 2026-11-21 — Executive Dashboard (blueprint section A)
+
+**Shipped (commit b8a9de7, backend live on Render, frontend live on Vercel):**
+- GET /dashboard/executive?period=day|week|month: total leads and new-this-period with previous-period change %, active deals and pipeline value, won revenue with previous-period comparison, probability-weighted expected revenue, conversion rate (definition returned with the data), top lead sources, deals at risk (open deals with no activity in 7+ days or a passed expected close), tasks due today and overdue, per-member team performance. Scope follows permissions: reports.company holders see the company view, sales sees own records only.
+- NEXUS Intelligence card: rule-based statements from the same aggregates, each with its period and sample, labeled as computed from workspace data with no external AI calls.
+- /app is now the dashboard (previously redirected to /app/contacts): KPI cards, period switcher, insights card, deals-at-risk and tasks panels, team performance table, top lead sources. Sidebar Dashboard link fixed to /app.
+
+**Verified live as the owner:** endpoint returns company scope with real counts; page renders and period switch works. Backend tests: 63 passed.
