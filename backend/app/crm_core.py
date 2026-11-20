@@ -14,7 +14,7 @@ from .database import get_db
 from .auth import current_membership
 from .models import Lead, AuditLog
 from .tenant import Contact, Pipeline, PipelineStage, Deal, Task, Activity
-from .rbac import has_permission, CONTACTS_VIEW_ALL, DEALS_DELETE
+from .rbac import has_permission, CONTACTS_VIEW_ALL, DEALS_DELETE, COMPANY_SETTINGS
 
 router = APIRouter()
 
@@ -201,11 +201,97 @@ def pipelines(ctx=Depends(current_membership), db: Session = Depends(get_db)):
     pipes = db.scalars(select(Pipeline).where(Pipeline.organization_id == ctx["organization_id"], Pipeline.deleted_at.is_(None)).order_by(Pipeline.id)).all()
     out = []
     for p in pipes:
-        stages = db.scalars(select(PipelineStage).where(PipelineStage.pipeline_id == p.id, PipelineStage.deleted_at.is_(None)).order_by(PipelineStage.position)).all()
+        stages = db.scalars(select(PipelineStage).where(PipelineStage.pipeline_id == p.id, PipelineStage.deleted_at.is_(None)).order_by(PipelineStage.position, PipelineStage.id)).all()
         out.append({"id": p.id, "name": p.name, "is_default": p.is_default,
                     "stages": [{"id": s.id, "name": s.name, "position": s.position,
                                 "probability": s.probability, "is_won": s.is_won, "is_lost": s.is_lost} for s in stages]})
     return out
+
+
+# ---------- pipeline stage management ----------
+
+class StageInput(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    probability: int = Field(default=0, ge=0, le=100)
+
+
+class StagePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    probability: int | None = Field(default=None, ge=0, le=100)
+    position: int | None = Field(default=None, ge=0)
+
+
+def stage_view(s: PipelineStage):
+    return {"id": s.id, "name": s.name, "position": s.position,
+            "probability": s.probability, "is_won": s.is_won, "is_lost": s.is_lost}
+
+
+def require_settings(ctx):
+    if not has_permission(ctx["membership"], COMPANY_SETTINGS):
+        raise HTTPException(403, "This action requires the permission: " + COMPANY_SETTINGS)
+
+
+def get_stage(db, stage_id, ctx):
+    s = db.scalar(select(PipelineStage).where(
+        PipelineStage.id == stage_id,
+        PipelineStage.organization_id == ctx["organization_id"],
+        PipelineStage.deleted_at.is_(None)))
+    if not s:
+        raise HTTPException(404, "Stage not found in this workspace")
+    return s
+
+
+@router.post("/pipelines/{pipeline_id}/stages", status_code=201)
+def create_stage(pipeline_id: int, data: StageInput, ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    require_settings(ctx)
+    pipe = db.scalar(select(Pipeline).where(Pipeline.id == pipeline_id,
+                                            Pipeline.organization_id == ctx["organization_id"],
+                                            Pipeline.deleted_at.is_(None)))
+    if not pipe:
+        raise HTTPException(404, "Pipeline not found in this workspace")
+    top = db.scalar(select(func.max(PipelineStage.position)).where(
+        PipelineStage.pipeline_id == pipe.id, PipelineStage.deleted_at.is_(None)))
+    s = PipelineStage(organization_id=ctx["organization_id"], pipeline_id=pipe.id,
+                      name=data.name.strip(), position=(top if top is not None else -1) + 1,
+                      probability=data.probability)
+    db.add(s)
+    db.flush()
+    log_activity(db, ctx, "pipeline.stage_added", f"Pipeline stage added: {s.name}")
+    db.commit()
+    return stage_view(s)
+
+
+@router.patch("/stages/{stage_id}")
+def update_stage(stage_id: int, data: StagePatch, ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    require_settings(ctx)
+    s = get_stage(db, stage_id, ctx)
+    changes = data.model_dump(exclude_unset=True)
+    if changes.get("name"):
+        s.name = changes["name"].strip()
+    if changes.get("probability") is not None:
+        s.probability = changes["probability"]
+    if changes.get("position") is not None:
+        s.position = changes["position"]
+    log_activity(db, ctx, "pipeline.stage_updated", f"Pipeline stage updated: {s.name}")
+    db.commit()
+    return stage_view(s)
+
+
+@router.delete("/stages/{stage_id}")
+def delete_stage(stage_id: int, ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    require_settings(ctx)
+    s = get_stage(db, stage_id, ctx)
+    open_deals = db.scalar(select(func.count(Deal.id)).where(Deal.stage_id == s.id, Deal.deleted_at.is_(None)))
+    if open_deals:
+        raise HTTPException(409, f"Move the {open_deals} deal(s) in this stage to another stage first")
+    remaining = db.scalar(select(func.count(PipelineStage.id)).where(
+        PipelineStage.pipeline_id == s.pipeline_id, PipelineStage.deleted_at.is_(None)))
+    if remaining <= 1:
+        raise HTTPException(400, "A pipeline needs at least one stage")
+    s.deleted_at = utcnow()
+    log_activity(db, ctx, "pipeline.stage_deleted", f"Pipeline stage removed: {s.name}")
+    db.commit()
+    return {"ok": True}
 
 
 # ---------- contacts ----------

@@ -108,3 +108,50 @@ def test_cross_org_isolation(client):
     assert client.patch(f"/contacts/{cid}", json={"name": "x"}, headers=h2).status_code == 404
     assert client.get("/contacts", headers=h2).json() == []
     assert client.get("/activities", headers=h2).json() == []
+
+
+def test_stage_management(client):
+    h = signup(client, "crm-stages@example.com", "CRM Stages")
+    pipes = client.get("/pipelines", headers=h).json()
+    pipe = pipes[0]
+    n0 = len(pipe["stages"])
+    r = client.post(f"/pipelines/{pipe['id']}/stages", json={"name": "Discovery", "probability": 30}, headers=h)
+    assert r.status_code == 201, r.text
+    st = r.json()
+    assert st["position"] == n0
+    r = client.patch(f"/stages/{st['id']}", json={"name": "Discovery Call", "position": 1}, headers=h)
+    assert r.json()["name"] == "Discovery Call" and r.json()["position"] == 1
+    stages = client.get("/pipelines", headers=h).json()[0]["stages"]
+    mine = [x for x in stages if x["id"] == st["id"]][0]
+    assert mine["position"] == 1 and mine["name"] == "Discovery Call"
+    # cannot delete a stage that holds a deal
+    cid = client.post("/contacts", json={"name": "Stage Guard"}, headers=h).json()["id"]
+    deal = client.post("/deals", json={"title": "Guard deal", "contact_id": cid}, headers=h).json()
+    r = client.delete(f"/stages/{deal['stage_id']}", headers=h)
+    assert r.status_code == 409
+    # empty stage deletes fine
+    r = client.delete(f"/stages/{st['id']}", headers=h)
+    assert r.json()["ok"] is True
+    stages = client.get("/pipelines", headers=h).json()[0]["stages"]
+    assert all(s["id"] != st["id"] for s in stages)
+    acts = client.get("/activities", headers=h).json()
+    kinds = [a["kind"] for a in acts]
+    assert "pipeline.stage_added" in kinds and "pipeline.stage_deleted" in kinds
+
+
+def test_stage_management_requires_settings_permission(client):
+    h = signup(client, "crm-stages2@example.com", "CRM Stages2")
+    org = org_of(client, h)
+    add_member(org, "crm-sales2@example.com", "sales")
+    sales_h = login(client, "crm-sales2@example.com")
+    pipe = client.get("/pipelines", headers=h).json()[0]
+    r = client.post(f"/pipelines/{pipe['id']}/stages", json={"name": "Nope"}, headers=sales_h)
+    assert r.status_code == 403
+    r = client.patch(f"/stages/{pipe['stages'][0]['id']}", json={"name": "Nope"}, headers=sales_h)
+    assert r.status_code == 403
+    r = client.delete(f"/stages/{pipe['stages'][0]['id']}", headers=sales_h)
+    assert r.status_code == 403
+    # cross-org: another org's stage is invisible
+    h2 = signup(client, "crm-stages3@example.com", "CRM Stages3")
+    r = client.patch(f"/stages/{pipe['stages'][0]['id']}", json={"name": "Hijack"}, headers=h2)
+    assert r.status_code == 404

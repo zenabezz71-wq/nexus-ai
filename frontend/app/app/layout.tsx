@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/app/contacts", label: "Contacts" },
   { href: "/app/pipeline", label: "Pipeline" },
   { href: "/app/tasks", label: "Tasks" },
+  { href: "/app/activity", label: "Activity" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

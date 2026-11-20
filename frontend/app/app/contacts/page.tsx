@@ -39,6 +39,8 @@ export default function ContactsPage() {
   useEffect(() => {
     apiFetch("/auth/me").then(setMe).catch(() => {});
     load().catch((e) => setNote(e.message));
+    const openId = new URLSearchParams(window.location.search).get("open");
+    if (openId) open(Number(openId)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
