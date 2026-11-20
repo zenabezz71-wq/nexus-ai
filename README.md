@@ -183,3 +183,13 @@ Sources for provider setup and changing limits:
 ### Verification for this feature
 
 Backend tests mock provider HTTP calls and never send real emails or WhatsApp messages. They cover consent/default-off gates, sample/invalid addresses, exact-preview binding, template edits, duplicate recipients, role/workspace isolation, quota boundaries, provider rejection/timeouts, unsubscribe persistence, approved WhatsApp template shape and signed STOP/delivery callbacks. A passing mocked test is not a live delivery test. Configure-later WhatsApp has not been tested against a real Meta account. No real campaign has been sent.
+
+## Lead editing and sales feedback
+
+Each dashboard lead has **Edit / feedback**. Workspace members can edit the lead name, normalized phone, email, goal/details, amount/currency and manual status, assign it to an active salesperson in the same workspace, and append sales feedback with the authenticated author's name and timestamp. Available stages include contacted, qualified, follow-up, won and lost alongside classification labels. Classification can overwrite a manually selected status if you deliberately run Classify again.
+
+Feedback is append-only through the API and the latest 100 notes are shown, with the full stored history retained. Save lead details before adding a note. Assignment does not create users or send notifications; user invitations remain unimplemented. The current demo may have only its admin in the salesperson list.
+
+Edits check the record timestamp to prevent stale saves from silently overwriting newer changes. Workspace scope is enforced for details, edits, notes and assignees. Changing phone/email resets consent; the editor cannot grant marketing consent or remove an opt-out. The **do not contact** option suppresses future outreach and cannot be undone in this editor. Editing a contact does not edit previously recorded sends. Edits and notes create audit records.
+
+Endpoints: `GET/PATCH /leads/{id}`, `POST /leads/{id}/feedback`, `GET /workspace/salespeople`. PATCH requires `expected_updated_at` from a current detail read. Notes are plain text, not HTML. Tests cover persisted edits/notes, author attribution, duplicate/invalid contacts, inactive/foreign assignee rejection, stale versions, workspace isolation and consent reset.
