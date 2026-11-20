@@ -26,7 +26,7 @@ depends_on = None
 # the WhatsApp suppression list) have no organization and stay unscoped.
 TENANT_TABLES = [
     "leads", "audit_logs", "sales_feedback", "lead_sales",
-    "outreach_templates", "outreach_sends", "outreach_suppression",
+    "outreach_templates", "outreach_sends", "outreach_suppressions",
     "whatsapp_sends", "assistant_conversations", "assistant_messages",
     "teams", "contacts", "pipelines", "pipeline_stages", "deals",
     "tasks", "activities", "notifications", "integrations", "ai_usage",
@@ -223,7 +223,17 @@ def upgrade():
 
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        # Guard against live-schema drift: only touch tables that exist, and
+        # fail loudly if an existing tenant table lacks organization_id
+        # (a policy on a missing column would break every query on it).
+        inspector = sa.inspect(bind)
+        existing = set(inspector.get_table_names())
         for table in TENANT_TABLES:
+            if table not in existing:
+                continue
+            columns = {c["name"] for c in inspector.get_columns(table)}
+            if "organization_id" not in columns:
+                raise RuntimeError(f"RLS target {table} has no organization_id column")
             bind.execute(sa.text(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"))
             bind.execute(sa.text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
             bind.execute(sa.text(POLICY_SQL.format(table=table)))

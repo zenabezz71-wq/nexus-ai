@@ -61,6 +61,10 @@ Not done yet in Phase 1 (next session, in order):
       signup, login, lead list, import, assistant demo all work; if anything
       returns empty, run `alembic downgrade 0005_assistant` on Render shell
       and investigate).
+      First deploy attempt (dep-dc08crom7kps73d7smtg) FAILED safe: typo in
+      TENANT_TABLES (outreach_suppression -> outreach_suppressions) aborted
+      the migration, Render kept the previous deploy live, API never went
+      down. Fixed + drift guard added in the RLS loop.
 - [ ] Password change; invitations and password reset need a mail path
       (currently no free verified sender — stub honestly).
 
