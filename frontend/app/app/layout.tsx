@@ -47,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="side">
         <div className="brand"><span className="mark">✦</span> NEXUS AI</div>
         <div className="org">{me ? me.organization_name : "Loading workspace..."}</div>
-        <Link className="nav" href="/">Dashboard</Link>
+        <Link className={"nav" + (pathname === "/app" ? " active" : "")} href="/app">Dashboard</Link>
         {LINKS.map((l) => (
           <Link key={l.href} className={"nav" + (pathname.startsWith(l.href) ? " active" : "")} href={l.href}>
             {l.label}

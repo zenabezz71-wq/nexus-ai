@@ -19,6 +19,7 @@ from .accounts import router as accounts_router, session_payload, limit_auth, Lo
 from .team import router as team_router
 from .crm_core import router as crm_core_router
 from .platform_admin import router as platform_router
+from .dashboard import router as dashboard_router
 from . import rls as _rls  # registers the tenant-context session listener
 from . import tenant as _tenant_models  # registers Phase 1 tables on Base.metadata
 from fastapi import Request
@@ -47,6 +48,7 @@ app.include_router(assistant_router)
 app.include_router(team_router)
 app.include_router(crm_core_router)
 app.include_router(platform_router)
+app.include_router(dashboard_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
