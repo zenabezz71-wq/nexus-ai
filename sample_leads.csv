@@ -1,0 +1,3 @@
+name,phone,email,currency,amount,goal,message,consent
+Mona Hassan,+201001112233,mona@example.com,EGP,12000,Request a product demo,Please send details,false
+Ahmed Ali,01005551234,ahmed@example.com,EGP,25000,Interested in pricing,Can you share the price?,true
