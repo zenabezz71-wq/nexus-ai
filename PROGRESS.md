@@ -134,3 +134,16 @@ free), integrations hub, billing enforcement, launch hardening.
 - Server side: organization soft-deleted (is_active=false, deleted_at set), audit_logs row platform.org_deleted with the reason and operator email, and the probe user's login now returns 403.
 - Non-operator envelope verified: /auth/me returns is_platform_admin=false for a normal user, /platform/organizations returns 403, and the shipped bundle redirects non-operators/expired sessions to / (gate confirmed in the live JS).
 - Probe workspace and user hard-removed after verification. Remaining tenant workspaces: NEXUS Demo Workspace, QA Company A/B (test-only leftovers from earlier QA; deletable from /platform anytime).
+
+## 2026-11-21 — Phase 2 workspace app shell + screens live
+
+**Shipped (commit 676b2ad, live on Vercel):**
+- Workspace shell with persistent sidebar at /app (Dashboard, Contacts, Pipeline, Tasks; Team when permitted; Platform for operators), workspace/user/role display, theme toggle, sign out. Auth-gated: missing or expired session redirects to /.
+- /app/contacts: searchable list, create, profile (deals, tasks, activity timeline), edit, note/call/meeting/message/email logging, archive (contacts.view_all only).
+- /app/pipeline: 7-stage kanban with drag-drop (HTML5 DnD), per-column counts and EGP totals, create-deal form, archive (deals.delete only). Stage moves are written to the activity timeline by the API.
+- /app/tasks: open/done/all filters, create with due date/priority/contact link, complete/reopen, delete, overdue highlighting.
+- Signed-in landing header now links to the workspace (/app).
+
+**Verified live as the owner:** contact create + note (timeline recorded note + contact.created), deal create linked to contact, drag-drop to Qualified (server recorded deal.stage_changed), task create + complete. All test data removed afterwards.
+
+**Session-stability fix (commit e0253ce, live):** the landing page's mount-effect session restore called clearSession() unconditionally when the stored token failed; racing a concurrent successful login it could delete the fresh token. Both clearSession call sites now only clear the exact token they validated. Verified live: UI sign-in persists (60s+ with valid /auth/me), and a valid token planted while a stale-token restore is failing survives (guard works).
