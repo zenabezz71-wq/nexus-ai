@@ -85,6 +85,22 @@ def test_lead_convert(client):
     assert leads[0]["status"] == "converted"
 
 
+def test_lead_delete(client):
+    h = signup(client, "crm-del@example.com", "CRM Del")
+    lid = make_lead(client, h)
+    client.post(f"/leads/{lid}/feedback", json={"body": "note"}, headers=h)
+    contact = client.post(f"/leads/{lid}/convert", headers=h).json()["contact"]
+    add_member(org_of(client, h), "crm-del-member@example.com", "salesperson")
+    mh = login(client, "crm-del-member@example.com")
+    assert client.delete(f"/leads/{lid}", headers=mh).status_code == 403
+    r = client.delete(f"/leads/{lid}", headers=h)
+    assert r.status_code == 200, r.text
+    assert client.get(f"/leads/{lid}", headers=h).status_code == 404
+    assert client.get("/leads", headers=h).json() == []
+    kept = client.get(f"/contacts/{contact['id']}", headers=h).json()
+    assert kept["lead_id"] is None
+
+
 def test_tasks_flow(client):
     h = signup(client, "crm-e@example.com", "CRM E")
     cid = client.post("/contacts", json={"name": "Tasky"}, headers=h).json()["id"]

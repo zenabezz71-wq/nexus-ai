@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import select, update, delete, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from sqlalchemy.exc import IntegrityError
 from .database import Base, get_db
 from .models import Lead, User, Membership, AuditLog, Organization, now
+from .tenant import Contact, Deal, Activity
+from .rbac import has_permission, CONTACTS_VIEW_ALL
 from .auth import current_membership
 from .normalization import normalize_phone
 from .outreach import address, OutreachSuppression
@@ -116,6 +118,24 @@ def edit_lead(lead_id: int, data: LeadPatch, ctx=Depends(current_membership), db
     except IntegrityError:
         db.rollback(); raise HTTPException(409, "Duplicate phone or concurrent update. Refresh and try again.")
     return detail(db, lead)
+
+@router.delete("/leads/{lead_id}")
+def delete_lead(lead_id: int, ctx=Depends(current_membership), db: Session=Depends(get_db)):
+    if not has_permission(ctx["membership"], CONTACTS_VIEW_ALL):
+        raise HTTPException(403, "Only a member with company-wide access can delete leads")
+    lead = scoped_lead(db, lead_id, ctx["organization_id"], lock=True)
+    org = lead.organization_id
+    name = lead.name or lead.phone
+    db.execute(update(Contact).where(Contact.organization_id == org, Contact.lead_id == lead.id).values(lead_id=None))
+    db.execute(update(Deal).where(Deal.organization_id == org, Deal.lead_id == lead.id).values(lead_id=None))
+    db.execute(update(Activity).where(Activity.organization_id == org, Activity.lead_id == lead.id).values(lead_id=None))
+    db.execute(delete(SalesFeedback).where(SalesFeedback.organization_id == org, SalesFeedback.lead_id == lead.id))
+    db.execute(delete(LeadSales).where(LeadSales.organization_id == org, LeadSales.lead_id == lead.id))
+    db.delete(lead)
+    db.add(Activity(organization_id=org, user_id=ctx["user"].id, kind="lead.deleted", body=f"Lead deleted: {name}"))
+    db.add(AuditLog(organization_id=org, actor_user_id=ctx["user"].id, action="lead.deleted", details={"lead_id": lead_id}))
+    db.commit()
+    return {"ok": True}
 
 @router.post("/leads/{lead_id}/feedback")
 def add_feedback(lead_id: int, data: NoteInput, ctx=Depends(current_membership), db: Session=Depends(get_db)):

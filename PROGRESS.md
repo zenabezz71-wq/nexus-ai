@@ -147,3 +147,16 @@ free), integrations hub, billing enforcement, launch hardening.
 **Verified live as the owner:** contact create + note (timeline recorded note + contact.created), deal create linked to contact, drag-drop to Qualified (server recorded deal.stage_changed), task create + complete. All test data removed afterwards.
 
 **Session-stability fix (commit e0253ce, live):** the landing page's mount-effect session restore called clearSession() unconditionally when the stored token failed; racing a concurrent successful login it could delete the fresh token. Both clearSession call sites now only clear the exact token they validated. Verified live: UI sign-in persists (60s+ with valid /auth/me), and a valid token planted while a stale-token restore is failing survives (guard works).
+
+## 2026-11-21 — Phase 2 continued: deal detail, stage management, activity feed, lead delete
+
+**Shipped (commit 28818ea backend live on Render, frontend live on Vercel; lead-delete in follow-up commit):**
+- Deal detail panel on /app/pipeline: open any deal card to edit title/stage/amount/expected close/next step, log notes, and read the deal's activity timeline (deal.created, deal.stage_changed, notes).
+- Pipeline stage management (company.settings only): add, rename, set probability, move left/right, and delete stages from the Manage stages mode on /app/pipeline. API: POST /pipelines/{id}/stages, PATCH /stages/{id}, DELETE /stages/{id} (409 while deals are in the stage, 400 when it is the last stage).
+- /app/activity: workspace-wide feed grouped by day with kind filters (All, Notes & comms, Deals, Contacts & leads, Tasks, Pipeline) and contact/deal name mapping.
+- Landing leads table: Convert button per unconverted lead (POST /leads/{id}/convert); converted leads show a converted badge instead. /app/contacts?open=<id> opens a contact profile directly.
+- DELETE /leads/{id} (company-wide access only): removes a lead and its feedback/assignment, nulls lead references on contacts/deals/activities, writes lead.deleted to the feed and audit log.
+
+**Verified live as the owner:** stage add/rename/move/delete (feed recorded each), lead import + convert (contact created, converted badge, no Convert button afterwards), deal create + stage change + note (timeline and /app/activity show all), contacts?open= deep link. Test data removed afterwards (deal, contact, lead).
+
+**Backend tests: 61 passed.**
