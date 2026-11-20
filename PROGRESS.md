@@ -45,12 +45,18 @@ Done 2026-11-20:
       Assistant, AdminAnalytics, SalesStudio extracted; page.tsx slimmed).
 - [x] Tests: 50 passing (4 new: RBAC matrix, team endpoints, schema
       roundtrip, analytics permission).
+- [x] Team management UI: /team route (frontend/app/team/page.tsx) — member
+      list, role select, extra-permission checkboxes, effective permissions.
+      Degrades gracefully while the old API is live (role-based fallback;
+      friendly rollout notice on 404).
+- [x] Frontend wired to the permissions payload: /auth/me permissions gate
+      the Team link and company analytics (legacy role fallback until the
+      Render deploy lands).
 
 Not done yet in Phase 1 (next session, in order):
 - [ ] Route-based app shell: fixed collapsible sidebar + header per blueprint,
       /dashboard /leads /contacts /pipeline /tasks /assistant /reports /team
       /settings routes. Keep existing screens working during the split.
-- [ ] Team management UI on top of /team endpoints.
 - [ ] RLS verification against live Postgres after Render redeploy (check
       signup, login, lead list, import, assistant demo all work; if anything
       returns empty, run `alembic downgrade 0005_assistant` on Render shell
