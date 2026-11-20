@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, Mapped, mapped_column
 from .database import Base, get_db
 from .models import Lead, AuditLog, now
 from .config import settings
-from .outreach import admin, PreviewInput, SendInput
+from .outreach import admin, PreviewInput, SendInput, is_demo
 from .auth import current_membership
 
 router = APIRouter()
@@ -93,13 +93,13 @@ def template():
         raise HTTPException(409, "Could not verify a supported APPROVED MARKETING template. Use BODY with exactly one {{1}} name parameter, optional static FOOTER, and STOP opt-out instructions.")
 
 
-def reason(db, lead):
+def reason(db, lead, preview=False):
     if not lead.consent: return "No recorded WhatsApp marketing consent"
     if lead.opted_out: return "Opted out"
     number = phone(lead.phone)
     if not number: return "Valid international phone number required"
     # The shipped sample CSV is not permission to message its numbers.
-    if lead.source == "sample" or number in ("201005551234", "201001112233"): return "Demonstration number cannot receive outreach"
+    if not preview and (is_demo(lead) or number in ("201005551234", "201001112233")): return "Demonstration number cannot receive outreach"
     if db.get(WhatsAppSuppression, number): return "Number is suppressed"
     if db.scalar(select(WhatsAppSend.id).where(WhatsAppSend.organization_id == lead.organization_id, WhatsAppSend.recipient == number)): return "Already attempted; no automatic resend"
     return ""
@@ -112,7 +112,7 @@ def digest(messages):
 def message(lead, tmpl):
     name = re.sub(r"[\r\n\t]+", " ", lead.name.strip() or "there")[:100]
     return {"lead_id": lead.id, "recipient": phone(lead.phone), "name": name,
-            "body": tmpl["text"].replace("{{1}}", name), "template": tmpl["name"], "language": tmpl["language"]}
+            "body": tmpl["text"].replace("{{1}}", name), "template": tmpl["name"], "language": tmpl["language"], "demo_only": is_demo(lead) or tmpl["name"] == "demo_only_not_approved"}
 
 
 @router.get("/whatsapp/status")
@@ -130,18 +130,20 @@ def status(ctx=Depends(current_membership), db: Session=Depends(get_db)):
 @router.post("/whatsapp/preview")
 def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db)):
     tmpl = template()
-    if not tmpl: return {"messages": [], "skipped": [], "review_token": "", "blockers": readiness()+["Configure and approve the Meta template before a real preview is available"]}
+    demo_template = tmpl is None
+    if demo_template:
+        tmpl = {"name": "demo_only_not_approved", "language": "en_US", "text": "DEMO ONLY, not a Meta-approved template. Hello {{1}}, this is an example promotional message. Reply STOP to opt out."}
     messages, skipped, numbers = [], [], set()
     for ident in dict.fromkeys(data.lead_ids):
         lead = db.scalar(select(Lead).where(Lead.id == ident, Lead.organization_id == ctx["organization_id"]))
         if not lead: raise HTTPException(404, "Lead not found in workspace")
-        why = reason(db, lead)
+        why = reason(db, lead, preview=True)
         if not why and phone(lead.phone) in numbers: why = "Duplicate phone in selection"
         if why: skipped.append({"lead_id": ident, "reason": why})
         else: messages.append(message(lead, tmpl)); numbers.add(phone(lead.phone))
     token = jwt.encode({"purpose": "whatsapp-review", "org": ctx["organization_id"], "user": ctx["user"].id,
         "ids": [m["lead_id"] for m in messages], "digest": digest(messages), "exp": datetime.now(timezone.utc)+timedelta(minutes=10)}, settings.jwt_secret, algorithm="HS256")
-    return {"messages": messages, "skipped": skipped, "review_token": token, "blockers": readiness()}
+    return {"messages": messages, "skipped": skipped, "review_token": "" if demo_template else token, "blockers": readiness()+(["Illustrative demo only. No approved Meta template is configured"] if demo_template else [])+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else [])}
 
 
 @router.post("/whatsapp/send")
