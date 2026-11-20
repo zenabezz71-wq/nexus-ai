@@ -117,16 +117,21 @@ def content(db, lead):
     template = get_template(db, lead.organization_id)
     subject = render(template["subject"], lead).replace("\r", " ").replace("\n", " ")[:200]
     url = settings.outreach_public_api_url.rstrip("/") + "/outreach/unsubscribe?token=" + quote(unsubscribe_token(lead.organization_id, address(lead.email)), safe="")
-    body = render(template["body"], lead) + "\n\nPromotional email\n" + settings.outreach_postal_address.strip() + "\nUnsubscribe: " + url
-    return {"lead_id": lead.id, "recipient": address(lead.email), "subject": subject, "body": body}
+    body = render(template["body"], lead) + "\n\nPromotional email\n" + (settings.outreach_postal_address.strip() or "[DEMO: valid sender postal address required]") + "\nUnsubscribe: " + url
+    return {"lead_id": lead.id, "recipient": address(lead.email), "subject": subject, "body": body, "demo_only": is_demo(lead)}
 
 
-def reason(db, lead):
+def is_demo(lead):
+    recipient = address(lead.email)
+    return bool(lead.source == "sample" or re.search(r"\bdemo\b|تجريبي", lead.name or "", re.I) or recipient.endswith(("@example.com", "@example.org", "@example.net")))
+
+
+def reason(db, lead, preview=False):
     if not lead.consent: return "No recorded email marketing consent"
     if lead.opted_out: return "Opted out"
     recipient = address(lead.email)
     if not recipient: return "Missing or invalid email"
-    if lead.source == "sample" or recipient.endswith(("@example.com", "@example.org", "@example.net")):
+    if is_demo(lead) and not preview:
         return "Demonstration addresses cannot receive outreach"
     if db.get(OutreachSuppression, (lead.organization_id, recipient)): return "Email is suppressed"
     if db.scalar(select(OutreachSend.id).where(OutreachSend.organization_id == lead.organization_id, OutreachSend.recipient == recipient)):
@@ -173,7 +178,7 @@ def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db))
     for ident in dict.fromkeys(data.lead_ids):
         lead = db.scalar(select(Lead).where(Lead.id == ident, Lead.organization_id == ctx["organization_id"]))
         if not lead: raise HTTPException(404, "Lead not found in workspace")
-        why = reason(db, lead)
+        why = reason(db, lead, preview=True)
         if not why and address(lead.email) in recipients: why = "Duplicate email in selection"
         if why: skipped.append({"lead_id": ident, "reason": why})
         else:
@@ -182,7 +187,7 @@ def preview(data: PreviewInput, ctx=Depends(admin), db: Session=Depends(get_db))
     token = jwt.encode({"purpose": "outreach-review", "org": ctx["organization_id"], "user": ctx["user"].id,
                         "ids": [m["lead_id"] for m in messages], "digest": fingerprint(messages),
                         "exp": datetime.now(timezone.utc)+timedelta(minutes=10)}, settings.jwt_secret, algorithm="HS256")
-    return {"messages": messages, "skipped": skipped, "review_token": token, "blockers": readiness(), "sender": {"name": settings.outreach_sender_name, "email": settings.outreach_sender_email}}
+    return {"messages": messages, "skipped": skipped, "review_token": token, "blockers": readiness()+(["Demo contacts are preview-only; no real send is allowed"] if any(m["demo_only"] for m in messages) else []), "sender": {"name": settings.outreach_sender_name, "email": settings.outreach_sender_email}}
 
 
 def reserve(db, message, org, actor):
