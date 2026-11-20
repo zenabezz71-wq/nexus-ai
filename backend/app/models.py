@@ -8,6 +8,7 @@ class Organization(Base):
     id:Mapped[int]=mapped_column(Integer,primary_key=True)
     name:Mapped[str]=mapped_column(String(200))
     slug:Mapped[str]=mapped_column(String(100),unique=True,index=True)
+    trial_only:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false")
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
 class User(Base):
     __tablename__="users"
