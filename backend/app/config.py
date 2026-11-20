@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     whatsapp_graph_version:str="v23.0"
     whatsapp_daily_cap:int=20
     whatsapp_cost_acknowledged:bool=False
+    assistant_whatsapp_enabled:bool=False
+    assistant_whatsapp_org_id:int=0
     model_config=SettingsConfigDict(env_file="../.env",extra="ignore")
     @property
     def cors_list(self): return [x.strip() for x in self.cors_origins.split(",") if x.strip()]
