@@ -7,7 +7,7 @@ from sqlalchemy import select, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from sqlalchemy.exc import IntegrityError
 from .database import Base, get_db
-from .models import Lead, User, Membership, AuditLog, now
+from .models import Lead, User, Membership, AuditLog, Organization, now
 from .auth import current_membership
 from .normalization import normalize_phone
 from .outreach import address, OutreachSuppression
@@ -104,7 +104,7 @@ def edit_lead(lead_id: int, data: LeadPatch, ctx=Depends(current_membership), db
         lead.opted_out = True; lead.consent = False
         email = address(lead.email); number = phone(lead.phone)
         if email and not db.get(OutreachSuppression, (lead.organization_id, email)): db.add(OutreachSuppression(organization_id=lead.organization_id, recipient=email))
-        if number and not db.get(WhatsAppSuppression, number): db.add(WhatsAppSuppression(recipient=number))
+        if number and not db.get(Organization,lead.organization_id).trial_only and not db.get(WhatsAppSuppression, number): db.add(WhatsAppSuppression(recipient=number))
     if "assigned_user_id" in fields:
         assignment = db.get(LeadSales, lead.id)
         if not assignment: assignment = LeadSales(lead_id=lead.id); db.add(assignment)
