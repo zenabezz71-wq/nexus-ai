@@ -17,6 +17,8 @@ from .crm import router as crm_router
 from .assistant import router as assistant_router, DEMO_SOURCE
 from .accounts import router as accounts_router, session_payload, limit_auth, LoginInput
 from .team import router as team_router
+from .crm_core import router as crm_core_router
+from .platform_admin import router as platform_router
 from . import rls as _rls  # registers the tenant-context session listener
 from . import tenant as _tenant_models  # registers Phase 1 tables on Base.metadata
 from fastapi import Request
@@ -43,6 +45,8 @@ app.include_router(crm_router)
 app.include_router(accounts_router)
 app.include_router(assistant_router)
 app.include_router(team_router)
+app.include_router(crm_core_router)
+app.include_router(platform_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
@@ -54,13 +58,15 @@ def login(data:LoginInput,request:Request,db:Session=Depends(get_db)):
     if not user or not user.is_active or not verify_password(password,user.password_hash):raise HTTPException(401,"Incorrect email or password")
     membership=db.scalar(select(Membership).where(Membership.user_id==user.id,Membership.is_active==True).order_by(Membership.id))
     if not membership:raise HTTPException(403,"No active organization")
+    org=db.get(Organization,membership.organization_id)
+    if not org or org.deleted_at is not None or not org.is_active:raise HTTPException(403,"This workspace has been suspended")
     return session_payload(db,user,membership)
 @app.get("/auth/me")
 def me(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     from .rbac import permissions_for
     org=db.get(Organization,ctx["organization_id"])
     m=ctx["membership"]
-    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":m.role,"grants":m.grants or [],"permissions":permissions_for(m.role,m.grants or [])}
+    return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":m.role,"grants":m.grants or [],"permissions":permissions_for(m.role,m.grants or []),"is_platform_admin":bool(getattr(ctx["user"],"is_platform_admin",False))}
 @app.get("/dashboard/summary")
 def summary(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     org=ctx["organization_id"]; total=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org,Lead.source!=DEMO_SOURCE)) or 0

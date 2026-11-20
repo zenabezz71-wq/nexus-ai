@@ -76,7 +76,31 @@ Not done yet in Phase 1 (next session, in order):
 - [ ] Password change; invitations and password reset need a mail path
       (currently no free verified sender — stub honestly).
 
-## Phase 2 — Core CRM — NOT STARTED
+## Platform super-admin — DONE 2026-11-20 (same-day requirement)
+
+- [x] users.is_platform_admin flag (not tied to any tenant org) +
+      organizations.is_active / deleted_at (migration 0007_platform_admin).
+- [x] /platform/organizations list, /suspend, /restore, DELETE (reason
+      required, soft-delete chosen over hard delete: reversible, keeps the
+      audit trail, no destructive cross-tenant cascade under FORCE RLS).
+      Operator cannot suspend/delete the workspace they act from.
+- [x] Enforcement: require_platform_admin runs in verified system_context so
+      tenant RLS cannot block operator views; suspended/deleted orgs are
+      locked out at login AND on every request (current_membership).
+- [x] Every action writes AuditLog on the target org (operator email,
+      action, reason).
+- [x] /platform UI page (operators only; /auth/me exposes is_platform_admin;
+      Platform link in header).
+- [x] Tests 58 passing (negative: owner/admin/manager/sales all 403).
+
+## Phase 2 — Core CRM — IN PROGRESS
+
+Backend API done 2026-11-20 (app/crm_core.py): contacts CRUD + profile,
+pipelines (auto-default 7-stage), deals + stage moves with activity logging,
+lead -> contact convert, tasks, activities timeline. Tests in
+test_crm_core.py. NOT yet deployed to Render.
+
+
 
 Contacts module, blueprint lead lifecycle + convert-to-deal, pipeline board
 with drag-and-drop, executive dashboard metrics, search/filters, export.
