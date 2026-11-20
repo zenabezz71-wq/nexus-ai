@@ -3,7 +3,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from app.config import settings
 from app.models import Base
-from app import outreach, whatsapp, crm
+from app import outreach, whatsapp, crm, assistant
 config=context.config
 if config.config_file_name: fileConfig(config.config_file_name)
 target_metadata=Base.metadata
