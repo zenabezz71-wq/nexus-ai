@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 type Lead = { id: number; name: string; email: string; phone: string; consent: boolean; opted_out?: boolean };
 type Log = { lead_id: number; recipient: string; status: string; error: string };
 type Status = { ready: boolean; blockers: string[]; daily_cap: number; remaining_today: number; attempts_today: number; logs: Log[]; template?: { subject: string; body: string } };
-type Preview = { messages: { lead_id: number; recipient: string; subject?: string; body: string }[]; skipped: { lead_id: number; reason: string }[]; review_token: string; blockers: string[]; sender?: { name: string; email: string } };
+type Preview = { messages: { lead_id: number; recipient: string; subject?: string; body: string; demo_only?: boolean }[]; skipped: { lead_id: number; reason: string }[]; review_token: string; blockers: string[]; sender?: { name: string; email: string } };
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function Outreach({ token, leads }: { token: string; leads: Lead[] }) {
@@ -36,7 +36,7 @@ export default function Outreach({ token, leads }: { token: string; leads: Lead[
     finally { setBusy(false); }
   }
   const eligible = leads.filter(x => x.consent && !x.opted_out && (channel === "email" ? Boolean(x.email) : Boolean(x.phone)));
-  return <section className="panel" aria-label="Outreach">
+  return <section className="panel" id="outreach" aria-label="Outreach">
     <h2>Outreach</h2>
     <p className="muted">Preview personalized messages, then choose whether to send. Imports never send messages. Only select people who explicitly opted in to this channel. Sample leads are not permission to contact anyone.</p>
     <div className="row" style={{ marginBottom: 16 }}>
@@ -63,7 +63,7 @@ export default function Outreach({ token, leads }: { token: string; leads: Lead[
     <div className="row" style={{ marginTop: 16 }}><button type="button" className="btn" disabled={busy || !selected.length} onClick={() => perform(async () => { setPreview(await request(path + "/preview", { method: "POST", body: JSON.stringify({ lead_ids: selected }) })); })}>Preview {selected.length || "selected"} messages</button></div>
     {preview && <div style={{ marginTop: 20 }}><h3>Review exactly what will be sent</h3>
       {preview.sender && <p>From and Reply-To: {preview.sender.name || "Not configured"} &lt;{preview.sender.email || "Not configured"}&gt;</p>}
-      {preview.messages.map(m => <article key={m.lead_id} style={{ padding: 16, margin: "12px 0", background: "#f6f8fc", border: "1px solid #e2e7ef", borderRadius: 8 }}><strong>To: {m.recipient}</strong>{m.subject && <p>Subject: {m.subject}</p>}<pre style={{ font: "inherit", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{m.body}</pre></article>)}
+      {preview.messages.map(m => <article key={m.lead_id} style={{ padding: 16, margin: "12px 0", background: "#f6f8fc", border: "1px solid #e2e7ef", borderRadius: 8 }}><strong>To: {m.recipient}</strong>{m.demo_only && <p className="alert">Demo preview only, this message cannot be sent.</p>}{m.subject && <p>Subject: {m.subject}</p>}<pre style={{ font: "inherit", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{m.body}</pre></article>)}
       {preview.skipped.map(x => <p key={x.lead_id}>Lead #{x.lead_id} skipped: {x.reason}</p>)}
       {!!preview.blockers.length && <ul className="alert">{preview.blockers.map(x => <li key={x}>{x}</li>)}</ul>}
       <p className="muted">By sending, you confirm these contacts opted in to {channel} marketing and you approve these recipients and words{channel === "whatsapp" ? ", including the applicable Meta charges" : ""}. Review expires in 10 minutes. Each recipient is attempted once, with no automatic retry.</p>
@@ -78,4 +78,4 @@ export default function Outreach({ token, leads }: { token: string; leads: Lead[
     <div style={{ overflowX: "auto" }}><table><thead><tr><th>Lead</th><th>Recipient</th><th>Status</th><th>Detail</th></tr></thead><tbody>{status?.logs.map((x, i) => <tr key={i}><td>#{x.lead_id}</td><td>{x.recipient}</td><td>{x.status}</td><td>{x.error || ""}</td></tr>)}{!status?.logs.length && <tr><td colSpan={4}>No outreach sent.</td></tr>}</tbody></table></div>
     {note && <p className="alert" role="status">{note}</p>}
   </section>;
-  }
+    }
