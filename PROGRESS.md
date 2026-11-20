@@ -178,3 +178,13 @@ free), integrations hub, billing enforcement, launch hardening.
 - /app/tasks: List/Calendar view toggle. Calendar is a month grid with prev/next navigation; tasks appear on their due date, overdue outlined red, done struck through, today highlighted. Tasks without a due date are noted as excluded.
 
 **Backend tests: 64 passed.** TypeScript compiles clean.
+
+## 2026-11-21 — Phase 3 slice 2: in-app notifications
+
+**Shipped:**
+- GET /notifications (own, latest 100 + unread count), POST /notifications/{id}/read, POST /notifications/read-all.
+- Assignment events notify the new assignee when someone else assigns them a task or a deal (task.assigned, deal.assigned). Self-assignment does not notify.
+- Lazy reminder: fetching notifications creates at most one tasks.overdue_reminder per user per UTC day, listing their overdue open-task count and oldest due date. No background worker needed (free tier).
+- /app/notifications page: list with kind tags, unread highlighting, mark-read and mark-all-read. Sidebar Notifications link with an unread-count badge that refreshes on navigation.
+
+**Backend tests: 66 passed.** TypeScript compiles clean.

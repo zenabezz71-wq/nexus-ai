@@ -9,11 +9,13 @@ const LINKS = [
   { href: "/app/pipeline", label: "Pipeline" },
   { href: "/app/tasks", label: "Tasks" },
   { href: "/app/activity", label: "Activity" },
+  { href: "/app/notifications", label: "Notifications" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [unread, setUnread] = useState(0);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -26,7 +28,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       return;
     }
     apiFetch("/auth/me").then(setMe).catch(() => {});
-  }, []);
+    apiFetch("/notifications").then((d) => setUnread(d.unread || 0)).catch(() => {});
+  }, [pathname]);
 
   function toggleTheme() {
     const t = theme === "dark" ? "light" : "dark";
@@ -51,6 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {LINKS.map((l) => (
           <Link key={l.href} className={"nav" + (pathname.startsWith(l.href) ? " active" : "")} href={l.href}>
             {l.label}
+            {l.href === "/app/notifications" && unread > 0 && <span className="badge">{unread}</span>}
           </Link>
         ))}
         {canTeam && <Link className="nav" href="/team">Team</Link>}

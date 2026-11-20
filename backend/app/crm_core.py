@@ -15,6 +15,7 @@ from .auth import current_membership
 from .models import Lead, AuditLog
 from .tenant import Contact, Pipeline, PipelineStage, Deal, Task, Activity
 from .rbac import has_permission, CONTACTS_VIEW_ALL, CONTACTS_EXPORT, DEALS_DELETE, COMPANY_SETTINGS
+from .notifications import notify
 
 router = APIRouter()
 
@@ -438,12 +439,15 @@ def update_deal(deal_id: int, data: DealPatch, ctx=Depends(current_membership), 
         log_activity(db, ctx, "deal.stage_changed",
                      f"Deal moved: {d.title} — {old.name if old else 'no stage'} → {stage.name}",
                      contact_id=d.contact_id, deal_id=d.id)
+    old_assignee = d.assigned_to
     for field in ("title", "contact_id", "amount", "currency", "next_step", "assigned_to"):
         if field in changes and changes[field] is not None:
             setattr(d, field, changes[field])
     if "expected_close" in changes:
         d.expected_close = parse_date(changes["expected_close"])
     d.last_activity_at = utcnow()
+    if d.assigned_to and d.assigned_to != old_assignee and d.assigned_to != ctx["user"].id:
+        notify(db, d.organization_id, d.assigned_to, "deal.assigned", f"Deal assigned to you: {d.title}")
     db.commit()
     return deal_view(d)
 
@@ -525,11 +529,14 @@ def update_task(task_id: int, data: TaskPatch, ctx=Depends(current_membership), 
         t.status = changes["status"]
         if t.status != "done":
             t.completed_at = None
+    old_assignee = t.assigned_to
     for field in ("title", "description", "priority", "assigned_to"):
         if field in changes and changes[field] is not None:
             setattr(t, field, changes[field])
     if "due_at" in changes:
         t.due_at = parse_dt(changes["due_at"])
+    if t.assigned_to and t.assigned_to != old_assignee and t.assigned_to != ctx["user"].id:
+        notify(db, t.organization_id, t.assigned_to, "task.assigned", f"Task assigned to you: {t.title}")
     db.commit()
     return task_view(t)
 
