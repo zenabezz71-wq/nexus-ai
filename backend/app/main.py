@@ -14,6 +14,7 @@ from .agents import classify
 from .outreach import router as outreach_router
 from .whatsapp import router as whatsapp_router
 from .crm import router as crm_router
+from .assistant import router as assistant_router, DEMO_SOURCE
 from .accounts import router as accounts_router, session_payload, limit_auth, LoginInput
 from fastapi import Request
 from .agents import baseline
@@ -37,6 +38,7 @@ app.include_router(outreach_router)
 app.include_router(whatsapp_router)
 app.include_router(crm_router)
 app.include_router(accounts_router)
+app.include_router(assistant_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}
@@ -55,13 +57,13 @@ def me(ctx=Depends(current_membership),db:Session=Depends(get_db)):
     return {"id":ctx["user"].id,"email":ctx["user"].email,"name":ctx["user"].full_name,"organization_id":org.id,"organization_name":org.name,"trial_only":org.trial_only,"role":ctx["membership"].role}
 @app.get("/dashboard/summary")
 def summary(ctx=Depends(current_membership),db:Session=Depends(get_db)):
-    org=ctx["organization_id"]; total=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org)) or 0
-    rows=db.execute(select(Lead.status,func.count(Lead.id)).where(Lead.organization_id==org).group_by(Lead.status)).all()
-    eligible=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org,Lead.consent==True,Lead.opted_out==False)) or 0
+    org=ctx["organization_id"]; total=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org,Lead.source!=DEMO_SOURCE)) or 0
+    rows=db.execute(select(Lead.status,func.count(Lead.id)).where(Lead.organization_id==org,Lead.source!=DEMO_SOURCE).group_by(Lead.status)).all()
+    eligible=db.scalar(select(func.count(Lead.id)).where(Lead.organization_id==org,Lead.consent==True,Lead.opted_out==False,Lead.source!=DEMO_SOURCE)) or 0
     return {"total_leads":total,"eligible_contacts":eligible,"statuses":dict(rows)}
 @app.get("/leads")
 def leads(status:str|None=None,q:str|None=None,limit:int=100,ctx=Depends(current_membership),db:Session=Depends(get_db)):
-    stmt=select(Lead).where(Lead.organization_id==ctx["organization_id"]).order_by(Lead.created_at.desc())
+    stmt=select(Lead).where(Lead.organization_id==ctx["organization_id"],Lead.source!=DEMO_SOURCE).order_by(Lead.created_at.desc())
     if status:stmt=stmt.where(Lead.status==status)
     if q:
         term=f"%{q}%";stmt=stmt.where((Lead.name.ilike(term))|(Lead.phone.ilike(term))|(Lead.email.ilike(term)))
