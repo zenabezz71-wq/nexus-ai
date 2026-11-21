@@ -20,6 +20,7 @@ from .models import Lead, Organization, AuditLog
 from .auth import current_membership
 from .rbac import has_permission, INTEGRATIONS_MANAGE
 from .normalization import normalize_phone
+from .rls import org_context, system_context
 
 router = APIRouter()
 
@@ -41,6 +42,10 @@ class WebhookLead(BaseModel):
 
 @router.post("/webhooks/leads/{key}", status_code=201)
 def receive_lead(key: str, data: WebhookLead, request: Request, db: Session = Depends(get_db)):
+    # Key-authenticated public endpoint: no user session exists yet, so enter
+    # system context for the org lookup, then bind the session to the matched
+    # org for the lead write (RLS).
+    system_context(db)
     match = None
     for cand in db.scalars(select(Organization).where(Organization.webhook_key.isnot(None),
                                                        Organization.is_active == True,
@@ -50,6 +55,7 @@ def receive_lead(key: str, data: WebhookLead, request: Request, db: Session = De
             break
     if not match:
         raise HTTPException(404, "Unknown webhook endpoint")
+    org_context(db, match.id)
     normalized, valid = normalize_phone(data.phone)
     if not valid:
         raise HTTPException(422, "Enter a valid international phone number")
