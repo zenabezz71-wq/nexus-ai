@@ -188,3 +188,9 @@ free), integrations hub, billing enforcement, launch hardening.
 - /app/notifications page: list with kind tags, unread highlighting, mark-read and mark-all-read. Sidebar Notifications link with an unread-count badge that refreshes on navigation.
 
 **Backend tests: 66 passed.** TypeScript compiles clean.
+
+## 2026-11-21 — Phase 4 slice 1: NEXUS Copilot (AI Assistant)
+- POST /copilot/ask: rule-based intent matching (Arabic + English) over live workspace data — follow-ups today/overdue, best salesperson this month (won deals → revenue → activity), deals at risk (7+ days stale or past expected close), monthly sales report, follow-up message draft (fixed template, labeled as such), lead stats, help. Scoped by reports.company permission.
+- Every answer carries a `method` label ("Rule-based answer computed from live workspace data; no external AI calls.") — honest about how it works; upgrade path is automatic if an LLM key is ever configured.
+- Frontend: /app/assistant page with bilingual suggested prompts (from the blueprint's example commands) and answer cards showing the method label; sidebar link "AI Assistant".
+- Tests: 2 new (all intents + empty-team ranking); 68/68 pass. tsc clean.

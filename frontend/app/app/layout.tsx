@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/app/tasks", label: "Tasks" },
   { href: "/app/activity", label: "Activity" },
   { href: "/app/notifications", label: "Notifications" },
+  { href: "/app/assistant", label: "AI Assistant" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
