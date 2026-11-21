@@ -22,6 +22,7 @@ from .platform_admin import router as platform_router
 from .dashboard import router as dashboard_router
 from .notifications import router as notifications_router
 from .copilot import router as copilot_router
+from .insights import router as insights_router
 from . import rls as _rls  # registers the tenant-context session listener
 from . import tenant as _tenant_models  # registers Phase 1 tables on Base.metadata
 from fastapi import Request
@@ -53,6 +54,7 @@ app.include_router(platform_router)
 app.include_router(dashboard_router)
 app.include_router(notifications_router)
 app.include_router(copilot_router)
+app.include_router(insights_router)
 app.add_middleware(CORSMiddleware,allow_origins=settings.cors_list,allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 @app.get("/health")
 def health():return {"ok":True,"service":"nexus-ai-api","version":"1.0.0"}

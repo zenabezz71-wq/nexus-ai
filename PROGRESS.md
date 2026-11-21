@@ -194,3 +194,9 @@ free), integrations hub, billing enforcement, launch hardening.
 - Every answer carries a `method` label ("Rule-based answer computed from live workspace data; no external AI calls.") — honest about how it works; upgrade path is automatic if an LLM key is ever configured.
 - Frontend: /app/assistant page with bilingual suggested prompts (from the blueprint's example commands) and answer cards showing the method label; sidebar link "AI Assistant".
 - Tests: 2 new (all intents + empty-team ranking); 68/68 pass. tsc clean.
+
+## 2026-11-21 — Phase 4 slice 2: Sales Insights (lead scoring + pipeline forecast)
+- GET /insights/lead-scores: transparent rule-based 0-100 scoring per active lead (status weight, classification confidence, recency, logged activities, open follow-up task, indicated value, email on file). Every factor is listed per lead; converted/not-interested/opted-out leads excluded; demo-studio leads never appear. Method label on the response.
+- GET /insights/forecast: open deals grouped by expected-close month with amount and probability-weighted value, unscheduled bucket, totals. Scoped by reports.company (sales users see own deals).
+- Frontend: /app/insights page (forecast panel + scoring table with per-lead factor breakdown); sidebar link "Insights".
+- Tests: 2 new (score ordering/factors/demo exclusion, forecast grouping/totals); 70/70 pass. tsc clean.
