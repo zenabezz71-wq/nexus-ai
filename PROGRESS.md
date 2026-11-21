@@ -213,3 +213,9 @@ free), integrations hub, billing enforcement, launch hardening.
 - POST /integrations/webhook-key/rotate: instant rotation; old URL dies immediately (tested).
 - Frontend: /app/integrations page (webhook card with curl example, copy + rotate, planned-integrations table); sidebar link. Sales members see statuses only, no key, rotate is 403.
 - Tests: 2 new (intake/dedupe/bad-key/no-duplicates, rotation invalidation + permissions); 74/74 pass. Migration verified against a fresh SQLite. tsc clean.
+
+## 2026-11-21 — Phase 6 slice 1: Audit Log UI + acceptance-criteria test pass
+- GET /audit-log: newest-first audit entries with actor name (or "system" for actor-less events like webhook intake), action tag, details. Gated on company.settings (owner/admin). Read-only.
+- Frontend: /app/audit page (time/actor/action/details table); sidebar link "Audit Log".
+- tests/test_acceptance.py proves the blueprint section 9 criteria: tenant isolation via direct API ids (leads/contacts/deals/tasks + AI digest), sales permission enforcement (export, deal delete, webhook rotate, audit log all 403), convert never duplicates (already_converted), stage change moves the executive report (won count + revenue), AI endpoints respect scope (forecast "own", copilot sales report sees only own), sensitive actions audited (lead.converted, contact.exported, webhook.lead with actor "system").
+- Tests: 6 new; 80/80 pass. tsc clean.
