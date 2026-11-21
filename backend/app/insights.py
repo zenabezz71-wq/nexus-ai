@@ -5,7 +5,7 @@ breakdowns. No external AI calls; every response carries a method label so
 users know exactly how the numbers were produced.
 """
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -110,4 +110,91 @@ def forecast(ctx=Depends(current_membership), db: Session = Depends(get_db)):
         "by_month": month_rows,
         "unscheduled": unscheduled,
         "method": FORECAST_METHOD,
+    }
+
+
+ACTIONS_METHOD = "Rule-based suggestions from live tasks, leads and deals; no external AI calls. Each suggestion names its reason."
+DIGEST_METHOD = "Rule-based digest of the logged activity timeline; not an AI-generated summary."
+
+
+@router.get("/insights/next-actions")
+def next_actions(ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    """Smart Follow-up: rule-based next-best-action list with reasons."""
+    org = ctx["organization_id"]
+    me = ctx["user"].id
+    company = has_permission(ctx["membership"], REPORTS_COMPANY)
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    tstmt = select(Task).where(Task.organization_id == org, Task.status == "open", Task.deleted_at.is_(None))
+    dstmt = select(Deal).where(Deal.organization_id == org, Deal.status == "open", Deal.deleted_at.is_(None))
+    if not company:
+        tstmt = tstmt.where(Task.assigned_to == me)
+        dstmt = dstmt.where(Deal.assigned_to == me)
+    tasks = db.scalars(tstmt).all()
+    deals = db.scalars(dstmt).all()
+    leads = db.scalars(select(Lead).where(Lead.organization_id == org, Lead.source != DEMO_SOURCE)).all()
+    acts = db.scalars(select(Activity).where(Activity.organization_id == org, Activity.lead_id.isnot(None))).all()
+    last_act = {}
+    for a in acts:
+        if a.lead_id not in last_act or aware(a.created_at) > aware(last_act[a.lead_id]):
+            last_act[a.lead_id] = a.created_at
+    tasked_leads = {t.lead_id for t in tasks if t.lead_id}
+
+    actions = []
+    overdue = [t for t in tasks if t.due_at and aware(t.due_at) < now and aware(t.due_at).date() != today]
+    for t in overdue[:5]:
+        actions.append({"type": "overdue_task", "ref": f"task:{t.id}", "label": t.title,
+                        "reason": f"Task overdue since {aware(t.due_at).date().isoformat()}"})
+    for d in deals:
+        if d.expected_close and d.expected_close < today:
+            actions.append({"type": "deal_past_close", "ref": f"deal:{d.id}", "label": d.title,
+                            "reason": f"Expected close {d.expected_close.isoformat()} has passed and the deal is still open"})
+        elif d.last_activity_at and aware(d.last_activity_at) < now - timedelta(days=7):
+            actions.append({"type": "deal_stale", "ref": f"deal:{d.id}", "label": d.title,
+                            "reason": "No activity on this deal for 7+ days"})
+    for x in leads:
+        if x.status in ("converted", "not_interested", "cold_lead") or x.opted_out:
+            continue
+        last = aware(last_act.get(x.id))
+        idle_days = (now - last).days if last else None
+        if x.status == "hot_lead" and x.id not in tasked_leads:
+            actions.append({"type": "hot_lead_no_task", "ref": f"lead:{x.id}", "label": x.name or x.phone,
+                            "reason": "Hot lead with no open follow-up task"})
+        elif x.status in ("hot_lead", "warm_lead", "follow_up") and (idle_days is None or idle_days >= 3):
+            why = "no logged activity yet" if idle_days is None else f"no activity for {idle_days} days"
+            actions.append({"type": "lead_idle", "ref": f"lead:{x.id}", "label": x.name or x.phone,
+                            "reason": f"Lead marked {x.status.replace('_', ' ')}, {why}"})
+    order = {"overdue_task": 0, "deal_past_close": 1, "deal_stale": 2, "hot_lead_no_task": 3, "lead_idle": 4}
+    actions.sort(key=lambda a: order[a["type"]])
+    return {"actions": actions[:15], "total": len(actions), "method": ACTIONS_METHOD}
+
+
+@router.get("/insights/lead-digest/{lead_id}")
+def lead_digest(lead_id: int, ctx=Depends(current_membership), db: Session = Depends(get_db)):
+    """Conversation Summary: rule-based digest of one lead's logged timeline."""
+    from fastapi import HTTPException
+    org = ctx["organization_id"]
+    x = db.scalar(select(Lead).where(Lead.id == lead_id, Lead.organization_id == org))
+    if not x:
+        raise HTTPException(404, "Lead not found")
+    now = datetime.now(timezone.utc)
+    acts = db.scalars(select(Activity).where(Activity.organization_id == org, Activity.lead_id == lead_id)
+                      .order_by(Activity.created_at.desc())).all()
+    by_kind = defaultdict(int)
+    for a in acts:
+        by_kind[a.kind] += 1
+    last = aware(acts[0].created_at) if acts else None
+    open_tasks = db.scalars(select(Task).where(Task.organization_id == org, Task.lead_id == lead_id,
+                                               Task.status == "open", Task.deleted_at.is_(None))).all()
+    return {
+        "lead_id": x.id, "name": x.name or x.phone, "status": x.status, "source": x.source,
+        "created_at": x.created_at.isoformat() if x.created_at else None,
+        "days_since_last_touch": (now - last).days if last else None,
+        "activity_count": len(acts), "activity_by_kind": dict(by_kind),
+        "latest": [{"kind": a.kind, "body": a.body[:200],
+                    "created_at": a.created_at.isoformat() if a.created_at else None} for a in acts[:3]],
+        "open_tasks": [{"id": t.id, "title": t.title,
+                        "due_at": t.due_at.isoformat() if t.due_at else None} for t in open_tasks],
+        "method": DIGEST_METHOD,
     }

@@ -200,3 +200,9 @@ free), integrations hub, billing enforcement, launch hardening.
 - GET /insights/forecast: open deals grouped by expected-close month with amount and probability-weighted value, unscheduled bucket, totals. Scoped by reports.company (sales users see own deals).
 - Frontend: /app/insights page (forecast panel + scoring table with per-lead factor breakdown); sidebar link "Insights".
 - Tests: 2 new (score ordering/factors/demo exclusion, forecast grouping/totals); 70/70 pass. tsc clean.
+
+## 2026-11-21 — Phase 4 slice 3: Smart Follow-up + Conversation Summaries
+- GET /insights/next-actions: rule-based next-best-action list, reason on every item — overdue tasks, deals past expected close, deals stale 7+ days, hot leads with no open task, warm/follow-up leads idle 3+ days. Scoped by reports.company.
+- GET /insights/lead-digest/{id}: rule-based conversation digest — activity counts by kind, latest 3 timeline entries, days since last touch, open tasks. Labeled "not an AI-generated summary".
+- Frontend: /app/insights gains a Next best actions panel; clicking a scored lead opens its digest card.
+- Tests: 2 new (action types/ordering/reasons; digest counts/latest/tasks/404); 72/72 pass. tsc clean.
