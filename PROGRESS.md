@@ -219,3 +219,8 @@ free), integrations hub, billing enforcement, launch hardening.
 - Frontend: /app/audit page (time/actor/action/details table); sidebar link "Audit Log".
 - tests/test_acceptance.py proves the blueprint section 9 criteria: tenant isolation via direct API ids (leads/contacts/deals/tasks + AI digest), sales permission enforcement (export, deal delete, webhook rotate, audit log all 403), convert never duplicates (already_converted), stage change moves the executive report (won count + revenue), AI endpoints respect scope (forecast "own", copilot sales report sees only own), sensitive actions audited (lead.converted, contact.exported, webhook.lead with actor "system").
 - Tests: 6 new; 80/80 pass. tsc clean.
+
+## 2026-11-21 — Closeout: BUILD-STATUS.md
+- Section-by-section build status against the blueprint: what is built and live, what is
+  adapted, what is blocked by cost/accounts (Communications Center, email invites, PDF/scheduled
+  reports), and what is out of scope (Subscription & Billing — money). No gaps hidden.
