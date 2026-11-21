@@ -35,13 +35,15 @@ export default function NotificationsPage() {
       <p className="muted">Assignment events and reminders from your workspace.</p>
       {note && <p className="alert" role="status">{note}</p>}
       <div className="panel" style={{ margin: 0 }}>
-        {items.map((n) => (
-          <div className="ev" key={n.id} style={n.read ? { opacity: 0.55 } : undefined}>
-            <span className="tag">{n.kind}</span> {n.body}
-            <small>{fmtDateTime(n.created_at)}</small>
-            {!n.read && <button className="btn alt mini" type="button" style={{ marginLeft: 8 }} onClick={() => markRead(n)}>Mark read</button>}
-          </div>
-        ))}
+        <div className="timeline">
+          {items.map((n) => (
+            <div className="ev" key={n.id} style={n.read ? { opacity: 0.55 } : undefined}>
+              <span className="tag">{n.kind}</span> {n.body}
+              {!n.read && <button className="btn alt mini" type="button" style={{ marginLeft: 8 }} onClick={() => markRead(n)}>Mark read</button>}
+              <small>{fmtDateTime(n.created_at)}</small>
+            </div>
+          ))}
+        </div>
         {!items.length && <p className="muted">Nothing yet. Notifications appear when a teammate assigns you a task or deal, or when your tasks go overdue.</p>}
       </div>
     </>
