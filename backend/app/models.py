@@ -10,6 +10,7 @@ class Organization(Base):
     slug:Mapped[str]=mapped_column(String(100),unique=True,index=True)
     trial_only:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false")
     is_active:Mapped[bool]=mapped_column(Boolean,default=True,server_default="true")
+    webhook_key:Mapped[str|None]=mapped_column(String(64),nullable=True,index=True)
     deleted_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),nullable=True)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
 class User(Base):

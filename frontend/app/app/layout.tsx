@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/app/notifications", label: "Notifications" },
   { href: "/app/assistant", label: "AI Assistant" },
   { href: "/app/insights", label: "Insights" },
+  { href: "/app/integrations", label: "Integrations" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -206,3 +206,10 @@ free), integrations hub, billing enforcement, launch hardening.
 - GET /insights/lead-digest/{id}: rule-based conversation digest — activity counts by kind, latest 3 timeline entries, days since last touch, open tasks. Labeled "not an AI-generated summary".
 - Frontend: /app/insights gains a Next best actions panel; clicking a scored lead opens its digest card.
 - Tests: 2 new (action types/ordering/reasons; digest counts/latest/tasks/404); 72/72 pass. tsc clean.
+
+## 2026-11-21 — Phase 5 slice 1: Inbound webhooks + honest Integrations page
+- POST /webhooks/leads/{key}: key-authenticated lead intake for external tools (no user session). Constant-time key compare, active-org check, phone normalization, idempotent on (org, phone) and external_id — a repeat push returns the existing lead, never a duplicate. Audit-logged (webhook.lead created/deduped). Migration 0008 adds organizations.webhook_key (lazily generated, indexed).
+- GET /integrations: webhook URL for integrations.manage holders (generated on first view), plus honest not_connected statuses for WhatsApp Business / Meta Lead Ads / Email / Google Calendar with the real reason each needs a paid API or the owner's own account.
+- POST /integrations/webhook-key/rotate: instant rotation; old URL dies immediately (tested).
+- Frontend: /app/integrations page (webhook card with curl example, copy + rotate, planned-integrations table); sidebar link. Sales members see statuses only, no key, rotate is 403.
+- Tests: 2 new (intake/dedupe/bad-key/no-duplicates, rotation invalidation + permissions); 74/74 pass. Migration verified against a fresh SQLite. tsc clean.
